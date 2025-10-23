@@ -50,6 +50,27 @@ class AdminDashboard:
         self.report_service = ReportService()
         self.calculator = CalculationService()
         logger.debug("AdminDashboard initialized")
+
+    def _get_allowed_date_range_60days(self):
+        """
+        Calculate the allowed date range for attendance entries (60 days back).
+        
+        Returns:
+            tuple: (min_date, max_date) - Allowed date range
+                min_date: 60 days before today
+                max_date: Today
+        """
+        from datetime import timedelta
+        
+        today = date.today()
+        
+        # Min date: 60 days back from today
+        min_date = today - timedelta(days=60)
+        
+        # Max date: Today (cannot add future dates)
+        max_date = today
+        
+        return min_date, max_date
     
     def render(self):
         """
@@ -70,6 +91,7 @@ class AdminDashboard:
             [
                 "Employee Overview",
                 "Add Employee",
+                "Quick Add Attendance",
                 "Manage Attendance",
                 "Set Overtime & Bonus",
                 "Employee Settings",
@@ -83,6 +105,8 @@ class AdminDashboard:
             self._render_employee_overview()
         elif page == "Add Employee":
             self._render_add_employee()
+        elif page == "Quick Add Attendance":
+            self._render_quick_add_attendance()
         elif page == "Manage Attendance":
             self._render_manage_attendance()
         elif page == "Set Overtime & Bonus":
@@ -155,32 +179,71 @@ class AdminDashboard:
         
         if not report or not report.get('attendance_records'):
             st.info("No attendance records for this month")
+        
+        # Always show create form (even if records exist)
+        st.markdown("---")
+        st.subheader("➕ Create New Record")
+        
+        # Get allowed date range (60 days back)
+        min_date, max_date = self._get_allowed_date_range_60days()
+        days_back = (max_date - min_date).days
+        
+        st.info(f"📅 **Allowed Date Range:** {min_date.strftime('%B %d, %Y')} to {max_date.strftime('%B %d, %Y')} ({days_back} days)")
+        
+        with st.form("create_attendance"):
+            col1, col2 = st.columns(2)
             
-            # Option to create new record
-            st.subheader("➕ Create New Record")
-            with st.form("create_attendance"):
-                new_date = st.date_input("Date", value=date.today())
-                check_in = st.time_input("Check-In Time", value=None)
-                check_out = st.time_input("Check-Out Time", value=None)
-                day_type = st.selectbox("Day Type", [dt.value for dt in DayType])
-                
-                if st.form_submit_button("Create Record"):
+            with col1:
+                new_date = st.date_input(
+                    "Date*", 
+                    value=date.today(),
+                    min_value=min_date,
+                    max_value=max_date,
+                    help=f"Select a date within the last {days_back} days"
+                )
+                check_in = st.time_input(
+                    "Check-In Time", 
+                    value=None,
+                    help="Leave empty if not applicable"
+                )
+            
+            with col2:
+                check_out = st.time_input(
+                    "Check-Out Time", 
+                    value=None,
+                    help="Leave empty if not applicable"
+                )
+                day_type = st.selectbox(
+                    "Day Type*", 
+                    [dt.value for dt in DayType],
+                    help="Type of day (working, vacation, etc.)"
+                )
+            
+            submitted = st.form_submit_button("✅ Create Record", type="primary")
+            
+            if submitted:
+                # Validate date is within range
+                if not (min_date <= new_date <= max_date):
+                    st.error(f"❌ Date must be between {min_date.strftime('%Y-%m-%d')} and {max_date.strftime('%Y-%m-%d')}")
+                else:
                     success, attendance, msg = self.admin_service.create_attendance_record(
                         user_id, new_date, check_in, check_out, day_type
                     )
                     if success:
-                        st.success(msg)
+                        st.success(f"✅ {msg}")
                         st.rerun()
                     else:
-                        st.error(msg)
+                        st.error(f"❌ {msg}")
+        
+        # If there are existing records, show them below
+        if report and report.get('attendance_records'):
+            st.markdown("---")
+            st.subheader(f"📅 Existing Records: {report['month_name']} {report['year']}")
+            
+            for record in report['attendance_records']:
+                with st.expander(f"📆 {record.attendance_date.strftime('%Y-%m-%d %A')}"):
+                    self._render_attendance_editor(record)
             return
-        
-        # Display records
-        st.subheader(f"📅 {report['month_name']} {report['year']}")
-        
-        for record in report['attendance_records']:
-            with st.expander(f"📆 {record.attendance_date.strftime('%Y-%m-%d %A')}"):
-                self._render_attendance_editor(record)
     
     def _render_attendance_editor(self, record):
         """
@@ -645,6 +708,137 @@ class AdminDashboard:
                     else:
                         st.error(f"✗ Failed to create employee: {message}")
 
+    def _render_quick_add_attendance(self):
+        """Render quick attendance entry page with 60-day lookback"""
+        st.header("⚡ Quick Add Attendance")
+        
+        # Get allowed date range
+        min_date, max_date = self._get_allowed_date_range_60days()
+        days_back = (max_date - min_date).days
+        
+        # Display date range info prominently
+        st.success(f"✅ **You can add attendance for the last {days_back} days**")
+        st.info(f"📅 Date Range: **{min_date.strftime('%B %d, %Y')}** to **{max_date.strftime('%B %d, %Y')}**")
+        
+        # Get all employees
+        employees = self.auth_service.get_all_employees()
+        if not employees:
+            st.warning("⚠️ No employees found. Please add employees first.")
+            return
+        
+        # Create form
+        with st.form("quick_add_attendance_form", clear_on_submit=True):
+            st.subheader("📝 Attendance Entry")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Employee selection
+                emp_options = {f"{e.full_name} (@{e.username})": e.user_id for e in employees}
+                selected_emp = st.selectbox(
+                    "Select Employee*",
+                    list(emp_options.keys()),
+                    help="Choose the employee for this attendance entry"
+                )
+                user_id = emp_options[selected_emp]
+                
+                # Date selection with validation
+                attendance_date = st.date_input(
+                    "Date*",
+                    value=date.today(),
+                    min_value=min_date,
+                    max_value=max_date,
+                    help=f"Must be within the last {days_back} days"
+                )
+                
+                # Day type
+                day_type = st.selectbox(
+                    "Day Type*",
+                    [dt.value for dt in DayType],
+                    help="Select the type of day"
+                )
+            
+            with col2:
+                # Check-in time
+                check_in = st.time_input(
+                    "Check-In Time",
+                    value=None,
+                    help="Leave empty if employee didn't check in"
+                )
+                
+                # Check-out time
+                check_out = st.time_input(
+                    "Check-Out Time",
+                    value=None,
+                    help="Leave empty if employee didn't check out"
+                )
+                
+                # Note about overtime/bonus
+                st.caption("💡 **Note:** Overtime and bonus are set separately in their dedicated sections")
+            
+            # Submit button
+            submitted = st.form_submit_button("✅ Create Attendance Record", type="primary", use_container_width=True)
+            
+            if submitted:
+                # Validate date is within range (double-check)
+                if not (min_date <= attendance_date <= max_date):
+                    st.error(f"❌ Date must be between {min_date.strftime('%Y-%m-%d')} and {max_date.strftime('%Y-%m-%d')}")
+                else:
+                    # Create attendance record
+                    success, attendance, msg = self.admin_service.create_attendance_record(
+                        user_id, attendance_date, check_in, check_out, day_type
+                    )
+                    
+                    if success:
+                        st.success(f"✅ {msg}")
+                        st.balloons()
+                        
+                        # Show created record details
+                        with st.container():
+                            st.markdown("---")
+                            st.subheader("📋 Created Record Details")
+                            
+                            col_a, col_b, col_c = st.columns(3)
+                            with col_a:
+                                st.metric("Employee", selected_emp.split('(')[0].strip())
+                            with col_b:
+                                st.metric("Date", attendance_date.strftime('%Y-%m-%d'))
+                            with col_c:
+                                st.metric("Day Type", day_type)
+                            
+                            if check_in or check_out:
+                                col_d, col_e = st.columns(2)
+                                with col_d:
+                                    if check_in:
+                                        st.write(f"**Check-In:** {check_in.strftime('%H:%M')}")
+                                with col_e:
+                                    if check_out:
+                                        st.write(f"**Check-Out:** {check_out.strftime('%H:%M')}")
+                    else:
+                        st.error(f"❌ {msg}")
+        
+        # Show recent entries summary
+        st.markdown("---")
+        st.subheader("📊 Recent Entries (Current Month)")
+        
+        # Get current month attendance for all employees
+        today = date.today()
+        all_reports = self.report_service.get_all_employees_report(today.year, today.month)
+        
+        if all_reports:
+            summary_data = []
+            for report in all_reports:
+                summary_data.append({
+                    'Employee': report['user_name'],
+                    'Working Days': report['actual_working_days'],
+                    'Absence Days': report['absence_days'],
+                    'Total Hours': f"{report['working_hours']:.1f}"
+                })
+            
+            df = pd.DataFrame(summary_data)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.info("ℹ️ No attendance records for current month yet")
 
 def render_admin_dashboard():
     """
