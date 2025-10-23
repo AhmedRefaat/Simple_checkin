@@ -75,8 +75,8 @@ $RECYCLE.BIN/
 # ===========================================
 # Streamlit Cache
 # ===========================================
-.streamlit/
-*.streamlit
+# .streamlit/
+# *.streamlit
 
 # ===========================================
 # Temporary Files
