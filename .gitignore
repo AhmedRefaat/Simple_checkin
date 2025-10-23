@@ -1,0 +1,105 @@
+# ===========================================
+# Python Language Artifacts
+# ===========================================
+# Compiled bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*$py.class
+
+# Optimization files
+*.opt-1.pyc
+*.opt-2.pyc
+
+# C extensions (if you use any)
+*.so
+*.dll
+*.dylib
+
+# ===========================================
+# Virtual Environments
+# ===========================================
+venv/
+.venv/
+virtualenv/
+
+
+# ===========================================
+# Environment Configuration & Secrets
+# ===========================================
+.env
+.env.local
+
+
+# ===========================================
+# Database Files
+# ===========================================
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+data/*.db
+data/*.sqlite
+
+# ===========================================
+# Application Logs
+# ===========================================
+*.log
+logs/
+*.log.*
+log/
+
+# ===========================================
+# IDE and Editor Files
+# ===========================================
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+
+# ===========================================
+# Operating System Files
+# ===========================================
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+
+
+# ===========================================
+# Streamlit Cache
+# ===========================================
+.streamlit/
+*.streamlit
+
+# ===========================================
+# Temporary Files
+# ===========================================
+*.tmp
+*.temp
+*.bak
+*.backup
+tmp/
+temp/
+
+# ===========================================
+# Project Specific
+# ===========================================
+# Your attendance database (keep safe!)
+attendance.db
+
+# Backup files
+*.backup.*
+backups/
+
+# Test data (if you have it)
+test_data/
+
+# demo file 
+Libs/app1.py
