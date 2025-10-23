@@ -22,7 +22,7 @@ from datetime import date
 import bcrypt
 from sqlalchemy.exc import IntegrityError
 
-from db_manager import db_manager
+from database.db_manager import db_manager
 from database.models import User, Holiday
 from utils.constants import UserRole, DatabaseConstants
 from utils.logger import get_logger
@@ -95,8 +95,8 @@ class DatabaseInitializer:
             return False
     
     def create_default_admin(self, 
-                           username: str = "admin", 
-                           password: str = "admin123",
+                           username: str = "admin_fatama", 
+                           password: str = "Bata8595",
                            full_name: str = "System Administrator") -> bool:
         """
         Create default administrator account.

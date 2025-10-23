@@ -40,6 +40,12 @@ logger = get_logger(__name__)
 # Initialize logger
 logger = get_logger(__name__)
 
+# ===== DATABASE INITIALIZATION ON STARTUP =====
+# Ensure database exists before app runs
+# This is critical for cloud deployments
+from init_on_startup import ensure_database_exists
+ensure_database_exists()
+
 
 # ==================== Page Configuration ====================
 
