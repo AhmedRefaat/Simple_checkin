@@ -190,7 +190,7 @@ class Config:
         logger.info("Validating configuration")
         
         # Check if secret key is changed from default in production
-        if not cls.DEVELOPMENT and cls.SECRET_KEY == "your-secret-key-change-in-production":
+        if not cls.DEVELOPMENT and cls.SECRET_KEY == "3GFUf5xNMCx-Jq85F3sEfwD0e_ZlEQquzX05dTSSdWA":
             raise ValueError("SECRET_KEY must be changed in production environment")
         
         # Validate numeric values
