@@ -21,6 +21,7 @@ import pandas as pd
 from services.checkin_service import CheckinService
 from services.report_service import ReportService
 from services.calculation_service import CalculationService
+from services.auth_service import AuthService  # add this to auth-user using auth_service ➡️ part of feature/change_user_password
 from utils.helpers import TimeHelper, CurrencyHelper
 from utils.constants import SessionKeys, DayType
 from utils.logger import get_logger
@@ -45,6 +46,7 @@ class EmployeeDashboard:
         self.checkin_service = CheckinService()
         self.report_service = ReportService()
         self.calculator = CalculationService()
+        self.auth_service = AuthService()  # add this to auth-user using auth_service ➡️ part of feature/change_user_password
         logger.debug("EmployeeDashboard initialized")
     
     def render(self):
@@ -60,6 +62,37 @@ class EmployeeDashboard:
         st.markdown(f"**Welcome, {st.session_state.get(SessionKeys.FULL_NAME.value)}!**")
         st.markdown("---")
         
+        # [bugfix] add sidebar selectbox for supported features for the employee dashboard
+        # this is added as part of feature/change_user_password
+        # Sidebar for navigation
+        page = st.sidebar.selectbox(
+            "📋 Select Function",
+            [
+                "Today's Status",
+                "Monthly Report",
+                "Full History",
+                "Change Password"
+            ]
+        )
+        
+        # Render selected page
+        if page == "Today's Status":
+            self._render_today_status()
+        elif page == "Monthly Report":
+            self._render_monthly_report()
+        elif page == "Full History":
+            self._render_full_history()
+        elif page == "Change Password":
+            self._render_change_password()
+    
+    # ============================= feature: show today employee's today-status =============================
+    # this is added as part of feature/change_user_password
+    def _render_today_status(self):
+        """
+        Render today's status page with check-in/out and current info.
+        
+        This is the default view showing all current day functionality.
+        """
         # Get user ID from session
         user_id = st.session_state.get(SessionKeys.USER_ID.value)
         
@@ -86,6 +119,229 @@ class EmployeeDashboard:
         
         # Monthly statistics section
         self._render_monthly_statistics(user_id)
+
+    # ============================= feature: show monthly employee's status =============================
+    # this is added as part of feature/change_user_password
+
+    def _render_monthly_report(self):
+        """
+        Render monthly report page with month/year selection.
+        
+        Allows employees to view any month's statistics and salary breakdown.
+        """
+        st.header("📊 Monthly Report")
+        
+        # Get user ID from session
+        user_id = st.session_state.get(SessionKeys.USER_ID.value)
+        
+        if not user_id:
+            st.error("Session expired. Please log in again.")
+            return
+        
+        # Month selection
+        col1, col2 = st.columns(2)
+        with col1:
+            year = st.number_input("Year", min_value=2020, max_value=2100, value=date.today().year)
+        with col2:
+            month = st.number_input("Month", min_value=1, max_value=12, value=date.today().month)
+        
+        # Get report
+        report = self.report_service.get_monthly_report(user_id, year, month)
+        
+        if not report:
+            st.info("No data available for this month")
+            return
+        
+        # Display report header
+        st.subheader(f"📅 {report['month_name']} {report['year']}")
+        
+        # Display metrics in columns
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Working Days", f"{report['actual_working_days']} / {report['expected_working_days']}")
+        
+        with col2:
+            st.metric("Absence Days", report['absence_days'])
+        
+        with col3:
+            st.metric("Total Time", f"{report['working_hours']}h {report['working_minutes']}m")
+        
+        with col4:
+            ot_total = report['overtime_minutes']
+            if ot_total != 0:
+                ot_sign = "+" if ot_total > 0 else ""
+                ot_h, ot_m = self.calculator.format_minutes_to_hours_minutes(abs(ot_total))
+                st.metric("Total Overtime", f"{ot_sign}{ot_h}h {ot_m}m")
+            else:
+                st.metric("Total Overtime", "0h 0m")
+        
+        # Financial summary
+        st.markdown("---")
+        st.subheader("💰 Financial Summary")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Expenses", CurrencyHelper.format_currency(report['extra_expenses']))
+        
+        with col2:
+            st.metric("Bonus", CurrencyHelper.format_currency(report['bonus']))
+            st.caption("Set by admin")
+        
+        with col3:
+            st.metric("Total Salary", CurrencyHelper.format_currency(report['salary']))
+        
+        # Show calculation breakdown
+        with st.expander("📊 Salary Calculation Breakdown"):
+            st.write(f"**Total Working Minutes:** {report['total_working_minutes']} minutes")
+            st.write(f"**Minute Cost:** {report['minute_cost']} EGP/minute")
+            st.write(f"**Base Salary:** {report['total_working_minutes']} × {report['minute_cost']} = "
+                    f"{report['total_working_minutes'] * report['minute_cost']:.2f} EGP")
+            st.write(f"**Extra Expenses:** {report['extra_expenses']:.2f} EGP")
+            st.write(f"**Bonus (admin-set):** {report['bonus']:.2f} EGP")
+            st.write(f"**TOTAL:** {report['salary']:.2f} EGP")
+
+    # ============================= feature: show full-history employee's status =============================
+    # this is added as part of feature/change_user_password
+
+    def _render_full_history(self):
+        """
+        Render full work history page.
+        
+        Shows career-wide statistics and monthly breakdown table.
+        """
+        st.header("📜 Full Work History")
+        
+        # Get user ID from session
+        user_id = st.session_state.get(SessionKeys.USER_ID.value)
+        
+        if not user_id:
+            st.error("Session expired. Please log in again.")
+            return
+        
+        # Get full report
+        report = self.report_service.get_full_report(user_id)
+        
+        if not report:
+            st.info("No data available")
+            return
+        
+        # Display employee info
+        st.write(f"**Name:** {report['user_name']}")
+        st.write(f"**Join Date:** {report['join_date']}")
+        st.write(f"**Minute Cost:** {report['minute_cost']} EGP/min")
+        
+        # Display cumulative stats
+        st.markdown("---")
+        st.subheader("📈 Career Statistics")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Working Days", report['cumulative_stats']['total_working_days'])
+        with col2:
+            st.metric("Total Hours", report['cumulative_stats']['total_working_hours'])
+        with col3:
+            st.metric("Total Bonus", CurrencyHelper.format_currency(report['cumulative_stats']['total_bonus']))
+        with col4:
+            st.metric("Total Salary", CurrencyHelper.format_currency(report['cumulative_stats']['total_salary']))
+        
+        # Monthly breakdown table
+        st.markdown("---")
+        st.subheader("📅 Monthly Breakdown")
+        
+        if report['monthly_summaries']:
+            data = []
+            for summary in report['monthly_summaries']:
+                data.append({
+                    'Month': f"{summary['month_name']} {summary['year']}",
+                    'Working Days': summary['working_days'],
+                    'Absence Days': summary['absence_days'],
+                    'Total Hours': summary['working_hours'],
+                    'Bonus (EGP)': f"{summary['bonus']:.2f}",
+                    'Salary (EGP)': f"{summary['salary']:.2f}"
+                })
+            
+            df = pd.DataFrame(data)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No monthly data available")
+
+    
+    # ============================= feature: change the employee password =============================
+    # this is added as part of feature/change_user_password
+
+    def _render_change_password(self):
+        """
+        Render password change form for employee.
+        
+        Allows employees to change their own password with validation.
+        """
+        st.header("🔐 Change Password")
+        
+        # Get user ID from session state
+        user_id = st.session_state.get(SessionKeys.USER_ID.value)
+        
+        if not user_id:
+            st.error("Session expired. Please log in again.")
+            return
+        
+        st.info("ℹ️ Password must be at least 6 characters long")
+        
+        with st.form("change_password_form"):
+            current_password = st.text_input(
+                "Current Password*",
+                type="password",
+                placeholder="Enter your current password"
+            )
+            
+            new_password = st.text_input(
+                "New Password*",
+                type="password",
+                placeholder="Enter new password (min 6 characters)"
+            )
+            
+            confirm_password = st.text_input(
+                "Confirm New Password*",
+                type="password",
+                placeholder="Re-enter new password"
+            )
+            
+            submitted = st.form_submit_button("🔒 Change Password", type="primary")
+            
+            if submitted:
+                # Validation
+                if not current_password or not new_password or not confirm_password:
+                    st.error("❌ All fields are required")
+                elif new_password != confirm_password:
+                    st.error("❌ New passwords do not match")
+                elif len(new_password) < 6:
+                    st.error("❌ New password must be at least 6 characters long")
+                else:
+                    # Call auth service to change password
+                    success, message = self.auth_service.change_password(
+                        user_id,
+                        current_password,
+                        new_password
+                    )
+                    
+                    if success:
+                        st.success(f"✅ {message}")
+                        st.info("🔄 Please log out and log in again with your new password")
+                    else:
+                        st.error(f"❌ {message}")
+        
+        # Security tips
+        st.markdown("---")
+        st.subheader("🛡️ Password Security Tips")
+        st.markdown("""
+        - Use a mix of uppercase, lowercase, numbers, and symbols
+        - Avoid using personal information
+        - Don't reuse passwords from other accounts
+        - Change your password regularly
+        - Never share your password with anyone
+        """)
+
     
     def _render_check_in_section(self, user_id: int):
         """

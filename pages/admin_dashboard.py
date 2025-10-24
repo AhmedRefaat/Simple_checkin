@@ -96,7 +96,8 @@ class AdminDashboard:
                 "Set Overtime & Bonus",
                 "Employee Settings",
                 "Holiday Management",
-                "Full Reports"
+                "Full Reports",
+                "Password Management"  # NEW OPTION defined in branch: feature/change_user_password
             ]
         )
         
@@ -117,6 +118,8 @@ class AdminDashboard:
             self._render_holiday_management()
         elif page == "Full Reports":
             self._render_full_reports()
+        elif page == "Password Management":  # NEW CONDITION defined in branch: feature/change_user_password
+            self._render_password_management()
     
     def _render_employee_overview(self):
         """Render employee overview page"""
@@ -676,7 +679,8 @@ class AdminDashboard:
             col1, col2 = st.columns(2)
             
             with col1:
-                username = st.text_input("Username*", placeholder="e.g., john_doe")
+                #bugfix: username must be lowercase
+                username = st.text_input("Username*", placeholder="e.g., john_doe", help="username is case-sensitive and will be converted to lowercase")
                 password = st.text_input("Password*", type="password", placeholder="Minimum 6 characters")
                 full_name = st.text_input("Full Name*", placeholder="e.g., John Doe")
             
@@ -839,6 +843,122 @@ class AdminDashboard:
             st.dataframe(df, use_container_width=True, hide_index=True)
         else:
             st.info("ℹ️ No attendance records for current month yet")
+
+    # ================== Change Password feature methods (admin or Employee-password-reset) =======================
+    # The admin can change their own password or reset any employee's password without knowing their current password
+    # this implementation is part of branch: feature/change_user_password
+
+    def _render_password_management(self):
+        """Render password management page for admin"""
+        st.header("🔐 Password Management")
+        
+        # Two tabs: Change own password & Reset employee password
+        tab1, tab2 = st.tabs(["🔒 Change My Password", "🔑 Reset Employee Password"])
+        
+        with tab1:
+            st.subheader("Change Admin Password")
+            st.info("ℹ️ Change your own admin account password")
+            
+            with st.form("admin_change_password_form"):
+                current_password = st.text_input(
+                    "Current Password*",
+                    type="password",
+                    placeholder="Enter your current password",
+                    key="admin_current"
+                )
+                
+                new_password = st.text_input(
+                    "New Password*",
+                    type="password",
+                    placeholder="Enter new password (min 6 characters)",
+                    key="admin_new"
+                )
+                
+                confirm_password = st.text_input(
+                    "Confirm New Password*",
+                    type="password",
+                    placeholder="Re-enter new password",
+                    key="admin_confirm"
+                )
+                
+                submitted = st.form_submit_button("🔒 Change My Password", type="primary")
+                
+                if submitted:
+                    # Get current admin user ID from session
+                    admin_user_id = st.session_state.user['user_id']
+                    
+                    # Validation
+                    if not current_password or not new_password or not confirm_password:
+                        st.error("❌ All fields are required")
+                    elif new_password != confirm_password:
+                        st.error("❌ New passwords do not match")
+                    elif len(new_password) < 6:
+                        st.error("❌ New password must be at least 6 characters long")
+                    else:
+                        # Call auth service to change password
+                        success, message = self.auth_service.change_password(
+                            admin_user_id,
+                            current_password,
+                            new_password
+                        )
+                        
+                        if success:
+                            st.success(f"✅ {message}")
+                            st.info("🔄 Please log out and log in again with your new password")
+                        else:
+                            st.error(f"❌ {message}")
+        
+        with tab2:
+            st.subheader("Reset Employee Password")
+            st.warning("⚠️ Admin privilege: Reset any employee's password without knowing their current password")
+            
+            # Select employee
+            employees = self.auth_service.get_all_employees()
+            if not employees:
+                st.info("No employees found")
+                return
+            
+            emp_options = {f"{e.full_name} (@{e.username})": e.user_id for e in employees}
+            selected_emp = st.selectbox("Select Employee*", list(emp_options.keys()))
+            user_id = emp_options[selected_emp]
+            
+            with st.form("admin_reset_password_form"):
+                new_password = st.text_input(
+                    "New Password*",
+                    type="password",
+                    placeholder="Enter new password for employee (min 6 characters)",
+                    key="reset_new"
+                )
+                
+                confirm_password = st.text_input(
+                    "Confirm New Password*",
+                    type="password",
+                    placeholder="Re-enter new password",
+                    key="reset_confirm"
+                )
+                
+                submitted = st.form_submit_button("🔑 Reset Password", type="primary")
+                
+                if submitted:
+                    # Validation
+                    if not new_password or not confirm_password:
+                        st.error("❌ All fields are required")
+                    elif new_password != confirm_password:
+                        st.error("❌ Passwords do not match")
+                    elif len(new_password) < 6:
+                        st.error("❌ Password must be at least 6 characters long")
+                    else:
+                        # Call admin service to reset password
+                        success, message = self.admin_service.reset_user_password(
+                            user_id,
+                            new_password
+                        )
+                        
+                        if success:
+                            st.success(f"✅ {message}")
+                            st.info(f"🔔 Please inform the employee of their new password: `{new_password}`")
+                        else:
+                            st.error(f"❌ {message}")
 
 def render_admin_dashboard():
     """
