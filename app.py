@@ -157,7 +157,8 @@ def render_login_page():
         
         # Login form
         with st.form("login_form"):
-            username = st.text_input("Username", placeholder="Enter your username")
+            #bugfix: ensure that username is handled in "lowercase" only
+            username = st.text_input("Username", placeholder="Enter your username", help="Username is case-insensitive")
             password = st.text_input("Password", type="password", placeholder="Enter your password")
             
             submit = st.form_submit_button("🔑 Login", type="primary", use_container_width=True)
