@@ -568,3 +568,53 @@ class AuthService:
         except Exception as e:
             logger.error(f"Error updating profile for user {user_id}: {e}")
             return False, "Failed to update profile"
+    
+    def change_password(self, user_id: int, old_password: str, new_password: str) -> tuple[bool, str]:
+        """
+        Change user password after verifying old password.
+        
+        Args:
+            user_id: User ID
+            old_password: Current password for verification
+            new_password: New password to set
+            
+        Returns:
+            tuple: (success: bool, message: str)
+        """
+        try:
+            # Get user
+            user = self.db.get_session().query(User).filter_by(user_id=user_id).first()
+            
+            if not user:
+                logger.warning(f"Password change failed: User {user_id} not found")
+                return False, "User not found"
+            
+            # Verify old password
+            old_password_bytes = old_password.encode('utf-8')
+            password_hash_bytes = user.password_hash.encode('utf-8')
+
+            if not bcrypt.checkpw(old_password_bytes, password_hash_bytes):
+                logger.warning(f"Invalid old password for user: {user_id}")
+                return False, "Current password is incorrect"
+            
+            # Validate new password
+            if len(new_password) < 6:
+                return False, "New password must be at least 6 characters long"
+            
+            if old_password == new_password:
+                return False, "New password must be different from current password"
+            
+            # Hash and update password
+            password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+            user.password_hash = password_hash.decode('utf-8')
+            user.updated_at = datetime.now()
+            
+            self.db.get_session().commit()
+            logger.info(f"Password changed successfully for user {user_id}")
+            
+            return True, "Password changed successfully"
+            
+        except Exception as e:
+            self.db.get_session().rollback()
+            logger.error(f"Error changing password for user {user_id}: {str(e)}")
+            return False, f"Failed to change password: {str(e)}"
