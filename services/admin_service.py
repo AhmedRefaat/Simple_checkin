@@ -23,7 +23,7 @@ from datetime import date, datetime, time
 from typing import Optional, Tuple, List, Dict
 from sqlalchemy import and_
 
-from database.db_manager import db_manager
+from database.db_manager import db_manager, DatabaseManager
 from database.models import Attendance, User, MonthlySummary, Holiday
 from services.calculation_service import CalculationService
 from services.report_service import ReportService
@@ -52,6 +52,7 @@ class AdminService:
     def __init__(self):
         """Initialize admin service with database manager and other services"""
         self.db = db_manager
+        # self.db = DatabaseManager()
         self.calculator = CalculationService()
         self.report_service = ReportService()
         logger.debug("AdminService initialized")
@@ -673,3 +674,42 @@ class AdminService:
             self.recalculate_monthly_summary(user_id, year, month)
         except Exception as e:
             logger.error(f"Error in auto-recalculation: {e}")
+
+    # ===================    Reset Password feature ====================
+    def reset_user_password(self, user_id: int, new_password: str) -> tuple[bool, str]:
+        """
+        Admin-initiated password reset without requiring old password.
+        
+        Args:
+            user_id: User ID to reset password for
+            new_password: New password to set
+            
+        Returns:
+            tuple: (success: bool, message: str)
+        """
+        try:
+            # Get user
+            user = self.db.get_session().query(User).filter_by(user_id=user_id).first()
+            
+            if not user:
+                logger.warning(f"Password reset failed: User {user_id} not found")
+                return False, "User not found"
+            
+            # Validate new password
+            if len(new_password) < 6:
+                return False, "New password must be at least 6 characters long"
+            
+            # Hash and update password
+            import bcrypt
+            password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+            user.password_hash = password_hash.decode('utf-8')
+            
+            self.db.get_session().commit()
+            logger.info(f"Password reset by admin for user {user_id} ({user.username})")
+            
+            return True, f"Password reset successfully for {user.username}"
+            
+        except Exception as e:
+            self.db.get_session().rollback()
+            logger.error(f"Error resetting password for user {user_id}: {str(e)}")
+            return False, f"Failed to reset password: {str(e)}"
