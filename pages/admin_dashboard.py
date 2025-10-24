@@ -676,7 +676,8 @@ class AdminDashboard:
             col1, col2 = st.columns(2)
             
             with col1:
-                username = st.text_input("Username*", placeholder="e.g., john_doe")
+                #bugfix: username must be lowercase
+                username = st.text_input("Username*", placeholder="e.g., john_doe", help="username is case-sensitive and will be converted to lowercase")
                 password = st.text_input("Password*", type="password", placeholder="Minimum 6 characters")
                 full_name = st.text_input("Full Name*", placeholder="e.g., John Doe")
             

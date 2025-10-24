@@ -69,6 +69,9 @@ class AuthService:
             else:
                 print(f"Login failed: {message}")
         """
+        #Bugfix: ensure that username is handled in "lowercase" only
+        username = username.lower().strip()
+
         logger.info(f"Authentication attempt for user: {username}")
         
         try:
@@ -148,6 +151,9 @@ class AuthService:
         Returns:
             Tuple of (success: bool, user: User or None, message: str)
         """
+        #bugfix: ensure that username is handled in "lowercase" only
+        username = username.lower().strip()
+
         logger.info(f"Creating new user: {username}")
         
         try:
@@ -373,6 +379,9 @@ class AuthService:
         Returns:
             User object or None if not found
         """
+        #bugfix: ensure that username is handled in "lowercase" only
+        username = username.lower().strip()
+        
         logger.debug(f"Fetching user by username: {username}")
         
         try:
