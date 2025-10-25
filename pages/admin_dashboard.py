@@ -50,6 +50,79 @@ class AdminDashboard:
         self.report_service = ReportService()
         self.calculator = CalculationService()
         logger.debug("AdminDashboard initialized")
+    
+    def _get_allowed_edit_range(self):
+        """
+        Calculate the allowed date range for editing overtime/expenses/comments.
+        
+        Business Rule:
+        - If today is between 1st and 8th of current month:
+            → Can edit: ALL of previous month + ALL of current month
+        - If today is after 8th of current month:
+            → Can edit: ALL of current month + Days 1-8 of next month
+        
+        Returns:
+            tuple: (
+                first_month_range: tuple(year, month, min_day, max_day) or None,
+                second_month_range: tuple(year, month, min_day, max_day)
+            )
+        
+        Examples:
+            Today: Oct 25, 2025 (after 8th)
+            → Returns: ((2025, 10, 1, 31), (2025, 11, 1, 8))
+            → Can edit: All October + Nov 1-8
+            
+            Today: Nov 5, 2025 (before 9th)
+            → Returns: ((2025, 10, 1, 31), (2025, 11, 1, 30))
+            → Can edit: All October + All November
+            
+            Today: Nov 15, 2025 (after 8th)
+            → Returns: ((2025, 11, 1, 30), (2025, 12, 1, 8))
+            → Can edit: All November + Dec 1-8
+        """
+        from datetime import timedelta
+        from calendar import monthrange
+        
+        today = date.today()
+        current_year = today.year
+        current_month = today.month
+        current_day = today.day
+        
+        # Get current month range
+        _, last_day_current = monthrange(current_year, current_month)
+        current_month_range = (current_year, current_month, 1, last_day_current)
+        
+        # Determine if we're in the grace period (1st to 8th of month)
+        if current_day <= 8:
+            # Grace period: Can edit PREVIOUS month (all days) + CURRENT month (all days)
+            
+            # Calculate previous month
+            if current_month == 1:
+                prev_year = current_year - 1
+                prev_month = 12
+            else:
+                prev_year = current_year
+                prev_month = current_month - 1
+            
+            _, last_day_prev = monthrange(prev_year, prev_month)
+            prev_month_range = (prev_year, prev_month, 1, last_day_prev)
+            
+            return prev_month_range, current_month_range
+        
+        else:
+            # Regular period: Can edit CURRENT month (all days) + NEXT month (days 1-8)
+            
+            # Calculate next month
+            if current_month == 12:
+                next_year = current_year + 1
+                next_month = 1
+            else:
+                next_year = current_year
+                next_month = current_month + 1
+            
+            next_month_range = (next_year, next_month, 1, 8)
+            
+            return current_month_range, next_month_range
 
     def _get_allowed_date_range_60days(self):
         """
@@ -300,9 +373,12 @@ class AdminDashboard:
                 else:
                     st.error(msg)
     
+    
+    # ======================= Adjust the method to include the overtime, expense, comment per day =======================   
+    # this change is added as part of branch: bug/fix_overtime_issue.
     def _render_overtime_bonus(self):
-        """Render overtime and bonus management page"""
-        st.header("⏱️ Set Overtime & Bonus")
+        """Render daily adjustments (overtime, expenses, comments) and bonus management page"""
+        st.header("📝 Daily Adjustments & Bonus")
         
         # Select employee
         employees = self.auth_service.get_all_employees()
@@ -314,67 +390,217 @@ class AdminDashboard:
         selected_emp = st.selectbox("Select Employee", list(emp_options.keys()))
         user_id = emp_options[selected_emp]
         
-        # Two tabs: Overtime and Bonus
-        tab1, tab2 = st.tabs(["⏱️ Daily Overtime", "💰 Monthly Bonus"])
+        # Two tabs: Daily Adjustments and Monthly Bonus
+        tab1, tab2 = st.tabs(["📝 Daily Adjustments (Overtime, Expenses & Comments)", "💰 Monthly Bonus"])
         
         with tab1:
-            self._render_overtime_setter(user_id)
+            self._render_daily_adjustments(user_id)
         
         with tab2:
             self._render_bonus_setter(user_id)
+
+    # ======================= New methods for daily adjustments =======================
+    # Render daily adjustments: overtime, expenses, and comments in one unified view.
+    # this is added as part of branch: bug/fix_overtime_issue.
     
-    def _render_overtime_setter(self, user_id: int):
+    def _render_daily_adjustments(self, user_id: int):
         """
-        Render daily overtime setter.
+        Render daily adjustments: overtime, expenses, and comments in one unified view.
+        Admin can edit current month + first 8 days of next month.
         
         Args:
             user_id: User ID
         """
-        st.subheader("Set Daily Overtime Adjustment")
-        st.info("ℹ️ Overtime is a manual adjustment (+ or -) added to daily working minutes")
+        st.subheader("Daily Adjustments: Overtime, Expenses & Comments")
+        st.info("ℹ️ **Overtime**: Time adjustment (± minutes) | **Expenses**: Additional costs (EGP) | **Comment**: Reason/notes for adjustments")
+        st.info("ℹ️ **Overtime**, **Expenses**, **Comment**: are editable up to 8th of the next month ONLY!")
         
-        # Select month
-        col1, col2 = st.columns(2)
-        with col1:
-            year = st.number_input("Year", min_value=2020, max_value=2100, value=date.today().year, key="ot_year")
-        with col2:
-            month = st.number_input("Month", min_value=1, max_value=12, value=date.today().month, key="ot_month")
+        # Get allowed edit range
+        first_range, second_range = self._get_allowed_edit_range()
+
+        # Display allowed range with clear messaging
+        first_month_name = date(first_range[0], first_range[1], 1).strftime('%B %Y')
+        second_month_name = date(second_range[0], second_range[1], 1).strftime('%B %Y')
+
+        # Determine message based on date range
+        today = date.today()
+        if today.day <= 8:
+            # Grace period message
+            st.success(f"✅ **Editable Period (Grace Period):** All of {first_month_name} + All of {second_month_name}")
+            st.info(f"📅 You're in the grace period (1st-8th). You can edit previous and current month records.")
+        else:
+            # Regular period message
+            st.success(f"✅ **Editable Period:** All of {first_month_name} + {second_month_name} (days 1-8)")
+            st.info(f"📅 Starting from 9th, you can only edit current month + first 8 days of next month.")
         
-        # Get attendance records
-        report = self.report_service.get_monthly_report(user_id, year, month)
+        # Get attendance records for both months
+        all_records = []
+        today = date.today()
+
+        # First month records (always all days)
+        first_report = self.report_service.get_monthly_report(user_id, first_range[0], first_range[1])
+        if first_report and first_report.get('attendance_records'):
+            all_records.extend([
+                (record, first_month_name) 
+                for record in first_report['attendance_records']
+            ])
+
+        # Second month records (filter based on grace period)
+        second_report = self.report_service.get_monthly_report(user_id, second_range[0], second_range[1])
+        if second_report and second_report.get('attendance_records'):
+            if today.day <= 8:
+                # Grace period: Show ALL days of second month (current month)
+                all_records.extend([
+                    (record, second_month_name) 
+                    for record in second_report['attendance_records']
+                ])
+            else:
+                # Regular period: Show only days 1-8 of second month (next month)
+                all_records.extend([
+                    (record, second_month_name) 
+                    for record in second_report['attendance_records']
+                    if record.attendance_date.day <= 8
+                ])
         
-        if not report or not report.get('attendance_records'):
-            st.info("No attendance records for this month")
+        if not all_records:
+            st.info("No attendance records found in the editable period")
             return
         
-        # Display records with overtime editor
-        for record in report['attendance_records']:
-            with st.container():
-                col1, col2, col3 = st.columns([2, 2, 2])
-                
-                with col1:
-                    st.write(f"**{record.attendance_date.strftime('%Y-%m-%d')}**")
-                    st.caption(f"Worked: {record.total_working_minutes} min")
-                
-                with col2:
-                    new_overtime = st.number_input(
-                        "Overtime (min)",
-                        value=record.overtime_minutes,
-                        step=10,
-                        key=f"ot_{record.attendance_id}",
-                        help="Positive = bonus time, Negative = penalty"
-                    )
-                
-                with col3:
-                    if st.button("Update", key=f"btn_ot_{record.attendance_id}"):
-                        success, msg = self.admin_service.update_overtime(record.attendance_id, new_overtime)
+       # Group records by month for better organization
+        st.markdown("---")
+
+        first_month_records = [(r, m) for r, m in all_records if m == first_month_name]
+        second_month_records = [(r, m) for r, m in all_records if m == second_month_name]
+
+        # Render first month
+        if first_month_records:
+            st.subheader(f"📅 {first_month_name}")
+            for record, _ in first_month_records:
+                self._render_daily_adjustment_row(record)
+
+        # Render second month
+        if second_month_records:
+            st.markdown("---")
+            # Dynamic heading based on grace period
+            if today.day <= 8:
+                st.subheader(f"📅 {second_month_name} (Current Month - All Days)")
+            else:
+                st.subheader(f"📅 {second_month_name} (Days 1-8 only)")
+            
+            for record, _ in second_month_records:
+                self._render_daily_adjustment_row(record)
+
+    # ======================= New methods for daily adjustments in row view (clean UI) =======================
+    # this is added as part of branch: bug/fix_overtime_issue.
+    def _render_daily_adjustment_row(self, record):
+        """
+        Render a single row for editing overtime, expenses, and comments together.
+        Uses an expander to keep the UI clean while allowing detailed editing.
+        
+        Args:
+            record: Attendance record object
+        """
+        # Build expander title with current values summary
+        date_str = record.attendance_date.strftime('%Y-%m-%d %A')
+        worked_str = f"{record.total_working_minutes} min"
+        
+        # Show indicators if there are adjustments
+        indicators = []
+        if record.overtime_minutes != 0:
+            indicators.append(f"⏱️ OT: {record.overtime_minutes:+d} min")
+        if record.extra_expenses != 0:
+            indicators.append(f"💰 Exp: {record.extra_expenses:.0f} EGP")
+        if record.comments:
+            indicators.append(f"💬 Has comment")
+        
+        title = f"📆 {date_str} | Worked: {worked_str}"
+        if indicators:
+            title += f" | {' | '.join(indicators)}"
+        
+        with st.expander(title, expanded=False):
+            # Display basic info
+            col_info1, col_info2 = st.columns(2)
+            with col_info1:
+                st.caption(f"**Day Type:** {record.day_type}")
+                st.caption(f"**Check-In:** {record.check_in_time.strftime('%H:%M') if record.check_in_time else 'N/A'}")
+            with col_info2:
+                st.caption(f"**Late:** {'Yes ⚠️' if record.is_late else 'No ✅'}")
+                st.caption(f"**Check-Out:** {record.check_out_time.strftime('%H:%M') if record.check_out_time else 'N/A'}")
+            
+            st.markdown("---")
+            
+            # Adjustments form
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                new_overtime = st.number_input(
+                    "⏱️ Overtime (minutes)",
+                    value=record.overtime_minutes,
+                    step=10,
+                    key=f"ot_{record.attendance_id}",
+                    help="Positive = bonus time, Negative = penalty"
+                )
+            
+            with col2:
+                new_expenses = st.number_input(
+                    "💰 Extra Expenses (EGP)",
+                    value=record.extra_expenses,
+                    step=10.0,
+                    format="%.2f",
+                    key=f"exp_{record.attendance_id}",
+                    help="Additional expenses (taxi, meals, etc.)"
+                )
+            
+            # Comment field (full width)
+            current_comment = record.comments or ""
+            new_comment = st.text_area(
+                "💬 Comment / Reason",
+                value=current_comment,
+                height=80,
+                placeholder="Add notes explaining why overtime/expenses were added (e.g., 'Stayed late for urgent client meeting', 'Taxi fare to client site')...",
+                key=f"comment_{record.attendance_id}",
+                help="Document the reason for adjustments"
+            )
+            
+            # ✅ FIX: Calculate change flags BEFORE button, so they're available in entire scope
+            overtime_changed = new_overtime != record.overtime_minutes
+            expenses_changed = new_expenses != record.extra_expenses
+            comment_changed = new_comment.strip() != current_comment.strip()
+            
+            # Save button
+            col_btn1, col_btn2 = st.columns([1, 4])
+            with col_btn1:
+                if st.button("💾 Save All", key=f"btn_save_{record.attendance_id}", type="primary"):
+                    # Check if any values changed
+                    if not overtime_changed and not expenses_changed and not comment_changed:
+                        st.info("ℹ️ No changes detected")
+                    else:
+                        # Update all three fields at once
+                        success, msg = self.admin_service.update_daily_adjustments(
+                            record.attendance_id,
+                            new_overtime,
+                            new_expenses,
+                            new_comment.strip() if new_comment.strip() else None
+                        )
+                        
                         if success:
-                            st.success(msg)
+                            st.success(f"✅ {msg}")
                             st.rerun()
                         else:
-                            st.error(msg)
+                            st.error(f"❌ {msg}")
+            
+            with col_btn2:
+                # Show what will be updated (now variables are in scope!)
+                changes = []
+                if overtime_changed:
+                    changes.append(f"Overtime: {record.overtime_minutes} → {new_overtime}")
+                if expenses_changed:
+                    changes.append(f"Expenses: {record.extra_expenses:.0f} → {new_expenses:.0f} EGP")
+                if comment_changed:
+                    changes.append("Comment: Updated")
                 
-                st.divider()
+                if changes:
+                    st.caption("📝 Changes: " + " | ".join(changes))
     
     def _render_bonus_setter(self, user_id: int):
         """
