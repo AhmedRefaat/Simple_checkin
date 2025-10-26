@@ -217,15 +217,18 @@ class CheckinService:
                 )
                 logger.debug(f"Total working time: {total_minutes} minutes")
                 
+                # bugfix: comment the overtime calc fn becasuse no implementaion for overtime calc 
+                # Also the overtime is set only by admin in this app
                 # Step 6: Calculate overtime
-                overtime = self.calculator.calculate_overtime(total_minutes)
-                logger.debug(f"Overtime calculated: {overtime} minutes")
+                overtime = 0
+                # overtime = self.calculator.calculate_overtime(total_minutes)
+                # logger.debug(f"Overtime calculated: {overtime} minutes")
                 
                 # Step 7: Update attendance record
                 attendance.check_out_time = check_out_time
                 attendance.total_working_minutes = total_minutes
                 attendance.overtime_minutes = overtime
-                attendance.updated_at = datetime.utcnow()
+                attendance.updated_at = datetime.now()
                 
                 session.flush()
                 
@@ -237,7 +240,7 @@ class CheckinService:
                 
                 # Prepare response message with working time breakdown
                 hours, minutes = self.calculator.format_minutes_to_hours_minutes(total_minutes)
-                overtime_sign = "+" if overtime > 0 else ""
+                overtime_sign = "-" if overtime < 0 else "+"
                 overtime_hours, overtime_mins = self.calculator.format_minutes_to_hours_minutes(abs(overtime))
                 
                 message = (f"Checked out successfully at {check_out_time.strftime('%H:%M')}. "

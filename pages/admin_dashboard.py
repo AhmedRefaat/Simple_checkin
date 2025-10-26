@@ -307,7 +307,9 @@ class AdminDashboard:
                     )
                     if success:
                         st.success(f"✅ {msg}")
-                        st.rerun()
+                        # bugfix: remove redundant rerun
+                        # part of branch: bug/fix_rerun_issue
+                        # st.rerun()
                     else:
                         st.error(f"❌ {msg}")
         
@@ -353,7 +355,9 @@ class AdminDashboard:
                     )
                     if success:
                         st.success(msg)
-                        st.rerun()
+                        #bugfix: remove redundant rerun 
+                        # this fix is part of branch: bug/fix_rerun_issue
+                        # st.rerun()
                     else:
                         st.error(msg)
             
@@ -369,7 +373,9 @@ class AdminDashboard:
                 success, msg = self.admin_service.change_day_type(record.attendance_id, new_day_type)
                 if success:
                     st.success(msg)
-                    st.rerun()
+                    # bugfix: remove redundant rerun
+                    # fix is part of branch: bug/fix_rerun_issue
+                    # st.rerun()  # no needed - form submission auto-reruns
                 else:
                     st.error(msg)
     
@@ -693,7 +699,9 @@ class AdminDashboard:
                     success, msg = self.admin_service.update_minute_cost(user_id, new_cost)
                     if success:
                         st.success(msg)
-                        st.rerun()
+                        # bugfix: remove redundant rerun
+                        # part of branch: bug/fix_rerun_issue
+                        #st.rerun()
                     else:
                         st.error(msg)
         
@@ -713,7 +721,9 @@ class AdminDashboard:
                     success, msg = self.admin_service.update_vacation_allowance(user_id, new_days)
                     if success:
                         st.success(msg)
-                        st.rerun()
+                        # bugfix: remove redundant rerun for updating employee_vacation balance
+                        # part of branch: bug/fix_rerun_issue
+                        # st.rerun()
                     else:
                         st.error(msg)
     
@@ -742,7 +752,9 @@ class AdminDashboard:
                         success, msg = self.admin_service.remove_holiday(holiday.holiday_date)
                         if success:
                             st.success(msg)
-                            st.rerun()
+                            # bugfix: remove redundant rerun
+                            # part of branch: bug/fix_rerun_issue
+                            # st.rerun()
                         else:
                             st.error(msg)
         else:
@@ -766,7 +778,9 @@ class AdminDashboard:
                     success, msg = self.admin_service.add_holiday(holiday_date, holiday_name)
                     if success:
                         st.success(msg)
-                        st.rerun()
+                        # bugfix: remove redundant rerun
+                        # part of branch: bug/fix_rerun_issue
+                        # st.rerun()
                     else:
                         st.error(msg)
                 else:
