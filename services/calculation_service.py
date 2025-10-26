@@ -147,6 +147,7 @@ class CalculationService:
     
     def calculate_monthly_salary(self,
                                 total_working_minutes: int,
+                                overtime_minutes: int,
                                 minute_cost: float,
                                 bonus: float = 0.0,
                                 total_extra_expenses: float = 0.0) -> Tuple[float, float]:
@@ -177,15 +178,17 @@ class CalculationService:
             (60000.0, 61500.0)
             # Base: 12000×5=60000, Total: 60000+500+1000=61500
         """
-        logger.info(f"Calculating monthly salary: {total_working_minutes} total minutes @ {minute_cost} EGP/min")
+        logger.info(f"Calculating monthly salary: {total_working_minutes} in addition to {overtime_minutes=} total minutes @ {minute_cost} EGP/min")
         
         # Base salary from total working time (which already includes overtime adjustments)
-        base_salary = total_working_minutes * minute_cost
-        
+        #bugfix: ensure that is included in salary calculation by adding them to the total_working_minutes
+        base_salary = (total_working_minutes + overtime_minutes) * minute_cost
+
         # Total salary = base + expenses + bonus
         total_salary = base_salary + total_extra_expenses + bonus
         
         logger.info(f"Monthly salary breakdown:")
+        logger.info(f"total working minutes: {total_working_minutes=} + {overtime_minutes=} = {total_working_minutes + overtime_minutes} minutes")
         logger.info(f"  Base (minutes × cost): {base_salary:.2f} EGP")
         logger.info(f"  Extra expenses: {total_extra_expenses:.2f} EGP")
         logger.info(f"  Bonus (admin-set): {bonus:.2f} EGP")
