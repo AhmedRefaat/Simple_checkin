@@ -104,3 +104,5 @@ test_data/
 
 # demo file 
 Libs/app1.py
+# DevContainer files
+.devcontainer/
