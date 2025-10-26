@@ -1073,12 +1073,12 @@ class AdminDashboard:
             
         # ✅ FIX: Display success details OUTSIDE form processing (after rerun)
         if st.session_state.quick_add_success:
-            st.balloons()  # ✅ Safe to use here (outside form block)
+            # ✅ Show balloons only once (not on every rerun)
+            if not st.session_state.quick_add_success.get('balloons_shown', False):
+                st.balloons()
+                st.session_state.quick_add_success['balloons_shown'] = True
             
-            with st.container():
-                st.markdown("---")
-                st.subheader("📋 Last Created Record")
-                
+            with st.expander("📋 Last Created Record (click to collapse)", expanded=True):
                 col_a, col_b, col_c = st.columns(3)
                 with col_a:
                     st.metric("Employee", st.session_state.quick_add_success['employee'])
@@ -1092,6 +1092,8 @@ class AdminDashboard:
                     st.write(f"**Check-In:** {st.session_state.quick_add_success['check_in']}")
                 with col_e:
                     st.write(f"**Check-Out:** {st.session_state.quick_add_success['check_out']}")
+                
+                st.caption("💡 This message will clear when you add another record")
             
             # Clear success state after displaying (or add a dismiss button)
             # if st.button("✅ Dismiss", key="dismiss_success"):
