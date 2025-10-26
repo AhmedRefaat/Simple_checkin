@@ -1094,9 +1094,9 @@ class AdminDashboard:
                         st.write(f"**Check-Out:** {st.session_state.quick_add_success['check_out']}")
                 
                 # Clear success state after displaying (or add a dismiss button)
-                if st.button("✅ Dismiss", key="dismiss_success"):
-                    st.session_state.quick_add_success = None
-                    st.rerun()
+                # if st.button("✅ Dismiss", key="dismiss_success"):
+                #     st.session_state.quick_add_success = None
+                #     st.rerun()
         
         # Show recent entries summary
         st.markdown("---")
