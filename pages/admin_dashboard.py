@@ -568,26 +568,30 @@ class AdminDashboard:
             comment_changed = new_comment.strip() != current_comment.strip()
             
             # Save button
+            # bugfix for removing st.rerun() after save - part of branch: bug/fix_absence_Days_slary_calculations
             col_btn1, col_btn2 = st.columns([1, 4])
             with col_btn1:
-                if st.button("💾 Save All", key=f"btn_save_{record.attendance_id}", type="primary"):
-                    # Check if any values changed
-                    if not overtime_changed and not expenses_changed and not comment_changed:
-                        st.info("ℹ️ No changes detected")
+                save_clicked = st.button("💾 Save All", key=f"btn_save_{record.attendance_id}", type="primary")
+
+            # ✅ FIX: Process button click outside the column context
+            if save_clicked:
+                # Check if any values changed
+                if not overtime_changed and not expenses_changed and not comment_changed:
+                    st.info("ℹ️ No changes detected")
+                else:
+                    # Update all three fields at once
+                    success, msg = self.admin_service.update_daily_adjustments(
+                        record.attendance_id,
+                        new_overtime,
+                        new_expenses,
+                        new_comment.strip() if new_comment.strip() else None
+                    )
+                    
+                    if success:
+                        st.success(f"✅ {msg}")
+                        # ✅ NO st.rerun() needed - button click auto-reruns
                     else:
-                        # Update all three fields at once
-                        success, msg = self.admin_service.update_daily_adjustments(
-                            record.attendance_id,
-                            new_overtime,
-                            new_expenses,
-                            new_comment.strip() if new_comment.strip() else None
-                        )
-                        
-                        if success:
-                            st.success(f"✅ {msg}")
-                            st.rerun()
-                        else:
-                            st.error(f"❌ {msg}")
+                        st.error(f"❌ {msg}")
             
             with col_btn2:
                 # Show what will be updated (now variables are in scope!)
@@ -635,13 +639,18 @@ class AdminDashboard:
                 help="Enter bonus amount. Can be positive or negative."
             )
             
-            if st.form_submit_button("💾 Set Bonus"):
-                success, msg = self.admin_service.update_bonus(user_id, year, month, new_bonus)
-                if success:
-                    st.success(msg)
-                    st.rerun()
-                else:
-                    st.error(msg)
+            submitted = st.form_submit_button("💾 Set Bonus")
+    
+        # ✅ FIX: Process form submission OUTSIDE the form block
+        # Fix the auto-refresh issue after submission
+        #part of the branch: bug/fix_absence_salary_calculation
+        if submitted:
+            success, msg = self.admin_service.update_bonus(user_id, year, month, new_bonus)
+            if success:
+                st.success(msg)
+                # ✅ NO st.rerun() needed - form submission auto-reruns
+            else:
+                st.error(msg)
     
     def _render_employee_settings(self):
         """Render employee settings page"""

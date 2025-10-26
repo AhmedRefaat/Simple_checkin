@@ -234,7 +234,7 @@ class ReportService:
             }
             
             logger.info(f"Monthly report generated: {actual_working_days} days, "
-                       f"{total_working_minutes} minutes, {summary.salary if summary else 0} EGP")
+                       f"{total_working_minutes} minutes, and overtime ya Ahmed = {total_overtime_minutes}, {summary.salary if summary else 0} EGP")
             
             return report
             
@@ -466,7 +466,7 @@ class ReportService:
                 # Calculate salary (bonus is stored separately, default 0)
                 bonus = summary.bonus if summary else 0.0
                 base_salary, total_salary = self.calculator.calculate_monthly_salary(
-                    total_minutes, minute_cost, bonus, expenses
+                    total_minutes, overtime_minutes, minute_cost, bonus, expenses
                 )
                 
                 if summary:
@@ -476,6 +476,7 @@ class ReportService:
                     summary.total_working_hours = hours
                     summary.total_working_minutes = mins
                     summary.overtime_minutes = overtime_minutes
+                    logger.info(f"the overtime minutes report_service:ReportService:_get_or_create_monthly_summary is: {overtime_minutes}")
                     # Note: bonus is NOT updated here - only admin can change it
                     summary.salary = total_salary
                 else:
