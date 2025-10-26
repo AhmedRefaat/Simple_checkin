@@ -161,6 +161,197 @@ class AdminService:
             logger.error(f"Error setting overtime: {e}")
             return False, f"Failed to set overtime: {str(e)}"
     
+    # ====================== Update extra expenses per empoloyee per day ======================
+    # this method is added as part of branch: bug/fix_overtime_issue.
+    def update_extra_expenses(self, attendance_id: int, extra_expenses: float) -> Tuple[bool, str]:
+        """
+        Set extra expenses value for a specific attendance record.
+        
+        Admin can add additional expenses (in EGP) for any day.
+        This value is added to salary calculations.
+        
+        Args:
+            attendance_id: Attendance record ID
+            extra_expenses: Extra expenses in EGP (can be positive or negative)
+            
+        Returns:
+            Tuple of (success: bool, message: str)
+            
+        Example:
+            >>> # Employee had taxi fare of 50 EGP
+            >>> admin.update_extra_expenses(123, 50.0)
+            >>> # This 50 EGP will be added to monthly salary
+        """
+        logger.info(f"Admin setting extra expenses for attendance {attendance_id}: {extra_expenses} EGP")
+        
+        try:
+            with self.db.session_scope() as session:
+                attendance = session.query(Attendance).filter_by(
+                    attendance_id=attendance_id
+                ).first()
+                
+                if not attendance:
+                    logger.warning(f"Attendance record not found: {attendance_id}")
+                    return False, "Attendance record not found"
+                
+                # Set extra expenses
+                attendance.extra_expenses = extra_expenses
+                attendance.updated_at = datetime.utcnow()
+                
+                logger.info(f"Extra expenses set: {extra_expenses} EGP for attendance {attendance_id}")
+                
+                # Trigger recalculation of monthly summary
+                self._trigger_monthly_recalculation(
+                    attendance.user_id,
+                    attendance.attendance_date.year,
+                    attendance.attendance_date.month
+                )
+                
+                return True, f"Extra expenses set to {extra_expenses} EGP"
+                
+        except Exception as e:
+            logger.error(f"Error setting extra expenses: {e}")
+            return False, f"Failed to set extra expenses: {str(e)}"
+        
+    # ==================== Add Update Comment method per employee per day ====================
+    # this method is added as part of branch: bug/fix_overtime_issue.
+    def update_comments(self, attendance_id: int, comments: Optional[str]) -> Tuple[bool, str]:
+        """
+        Set or update comments for a specific attendance record.
+        
+        Admin can add notes, reasons, or any relevant information for any day.
+        
+        Args:
+            attendance_id: Attendance record ID
+            comments: Comment text (None to clear comment)
+            
+        Returns:
+            Tuple of (success: bool, message: str)
+            
+        Example:
+            >>> # Add a comment explaining overtime
+            >>> admin.update_comments(123, "Employee stayed late for urgent client delivery")
+        """
+        logger.info(f"Admin updating comments for attendance {attendance_id}")
+        
+        try:
+            with self.db.session_scope() as session:
+                attendance = session.query(Attendance).filter_by(
+                    attendance_id=attendance_id
+                ).first()
+                
+                if not attendance:
+                    logger.warning(f"Attendance record not found: {attendance_id}")
+                    return False, "Attendance record not found"
+                
+                # Set comments
+                attendance.comments = comments
+                attendance.updated_at = datetime.now()
+                
+                if comments:
+                    logger.info(f"Comments updated for attendance {attendance_id}")
+                    return True, "Comment saved successfully"
+                else:
+                    logger.info(f"Comments cleared for attendance {attendance_id}")
+                    return True, "Comment cleared successfully"
+                
+        except Exception as e:
+            logger.error(f"Error updating comments: {e}")
+            return False, f"Failed to update comments: {str(e)}"
+    
+    # ==================== New method to update all daily data (i.e, Overtime, Expenses, Comments) at once for an employee ====================
+    # this method is added as part of branch: bug/fix_overtime_issue.
+    def update_daily_adjustments(self, 
+                        attendance_id: int, 
+                        overtime_minutes: int, 
+                        extra_expenses: float,
+                        comments: Optional[str]) -> Tuple[bool, str]:
+        """
+        Update all daily adjustments (overtime, expenses, comments) in one atomic operation.
+        This is more efficient than calling three separate methods.
+        
+        Args:
+            attendance_id: Attendance record ID
+            overtime_minutes: Overtime in minutes (can be positive or negative)
+            extra_expenses: Extra expenses in EGP (can be positive or negative)
+            comments: Comment text (None to clear comment)
+            
+        Returns:
+            Tuple of (success: bool, message: str)
+            
+        Example:
+            >>> # Update all three fields at once
+            >>> admin.update_daily_adjustments(
+            ...     123, 
+            ...     30,  # +30 min overtime
+            ...     50.0,  # 50 EGP taxi fare
+            ...     "Stayed late for client meeting, taxi fare reimbursed"
+            ... )
+        """
+        logger.info(f"Admin updating daily adjustments for attendance {attendance_id}")
+        
+        # Validate overtime value
+        is_valid, error_msg = Validators.validate_overtime(overtime_minutes)
+        if not is_valid:
+            logger.warning(f"Invalid overtime value: {error_msg}")
+            return False, error_msg
+        
+        try:
+            # Variables to store for recalculation (outside session scope)
+            user_id = None
+            attendance_year = None
+            attendance_month = None
+            
+            # ✅ FIX: Perform database update in isolated session scope
+            with self.db.session_scope() as session:
+                attendance = session.query(Attendance).filter_by(
+                    attendance_id=attendance_id
+                ).first()
+                
+                if not attendance:
+                    logger.warning(f"Attendance record not found: {attendance_id}")
+                    return False, "Attendance record not found"
+                
+                # Store values for recalculation BEFORE session closes
+                user_id = attendance.user_id
+                attendance_year = attendance.attendance_date.year
+                attendance_month = attendance.attendance_date.month
+                
+                # Update all three fields
+                attendance.overtime_minutes = overtime_minutes
+                attendance.extra_expenses = extra_expenses
+                attendance.comments = comments
+                attendance.updated_at = datetime.utcnow()
+                
+                logger.info(f"Daily adjustments updated for attendance {attendance_id}: "
+                        f"OT={overtime_minutes}min, Exp={extra_expenses}EGP, Comment={'Yes' if comments else 'No'}")
+            
+            # ✅ Session closed here - changes are committed
+            
+            # Now trigger recalculation AFTER commit
+            logger.debug(f"Triggering monthly recalculation for user {user_id}, {attendance_year}-{attendance_month}")
+            self._trigger_monthly_recalculation(user_id, attendance_year, attendance_month)
+            
+            # Build success message
+            updates = []
+            if overtime_minutes != 0:
+                sign = "+" if overtime_minutes > 0 else ""
+                updates.append(f"Overtime: {sign}{overtime_minutes} min")
+            if extra_expenses != 0:
+                updates.append(f"Expenses: {extra_expenses} EGP")
+            if comments:
+                updates.append("Comment added")
+            
+            if updates:
+                return True, f"Updated: {', '.join(updates)}"
+            else:
+                return True, "All adjustments cleared"
+                
+        except Exception as e:
+            logger.error(f"Error updating daily adjustments: {e}")
+            return False, f"Failed to update adjustments: {str(e)}"
+
+
     def update_bonus(self, user_id: int, year: int, month: int, bonus: float) -> Tuple[bool, str]:
         """
         Set bonus value for a user's monthly summary.
