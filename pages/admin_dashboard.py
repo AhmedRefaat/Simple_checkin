@@ -1040,63 +1040,63 @@ class AdminDashboard:
             # Submit button
             submitted = st.form_submit_button("✅ Create Attendance Record", type="primary", use_container_width=True)
             
-            # ✅ FIX: Process form submission OUTSIDE the form block
-            # fix is part of branch: bug/fix_quick_add_attendance_react_issue
-            if submitted:
-                # Validate date is within range (double-check)
-                if not (min_date <= attendance_date <= max_date):
-                    st.error(f"❌ Date must be between {min_date.strftime('%Y-%m-%d')} and {max_date.strftime('%Y-%m-%d')}")
+        # ✅ FIX: Process form submission OUTSIDE the form block
+        # fix is part of branch: bug/fix_quick_add_attendance_react_issue
+        if submitted:
+            # Validate date is within range (double-check)
+            if not (min_date <= attendance_date <= max_date):
+                st.error(f"❌ Date must be between {min_date.strftime('%Y-%m-%d')} and {max_date.strftime('%Y-%m-%d')}")
+            else:
+                # ✅ FIX: Convert 00:00 to None (no check-in/out)
+                check_in_final = None if check_in == time(0, 0) else check_in
+                check_out_final = None if check_out == time(0, 0) else check_out
+                
+                # Create attendance record
+                success, attendance, msg = self.admin_service.create_attendance_record(
+                    user_id, attendance_date, check_in_final, check_out_final, day_type
+                )
+                
+                if success:
+                    # ✅ FIX: Store success info in session state
+                    st.session_state.quick_add_success = {
+                        'employee': selected_emp.split('(')[0].strip(),
+                        'date': attendance_date.strftime('%Y-%m-%d'),
+                        'day_type': day_type,
+                        'check_in': check_in_final.strftime('%H:%M') if check_in_final else 'N/A',
+                        'check_out': check_out_final.strftime('%H:%M') if check_out_final else 'N/A'
+                    }
+                    st.success(f"✅ {msg}")
+                    # ✅ NO balloons or containers here - let rerun handle it
                 else:
-                    # ✅ FIX: Convert 00:00 to None (no check-in/out)
-                    check_in_final = None if check_in == time(0, 0) else check_in
-                    check_out_final = None if check_out == time(0, 0) else check_out
-                    
-                    # Create attendance record
-                    success, attendance, msg = self.admin_service.create_attendance_record(
-                        user_id, attendance_date, check_in_final, check_out_final, day_type
-                    )
-                    
-                    if success:
-                        # ✅ FIX: Store success info in session state
-                        st.session_state.quick_add_success = {
-                            'employee': selected_emp.split('(')[0].strip(),
-                            'date': attendance_date.strftime('%Y-%m-%d'),
-                            'day_type': day_type,
-                            'check_in': check_in_final.strftime('%H:%M') if check_in_final else 'N/A',
-                            'check_out': check_out_final.strftime('%H:%M') if check_out_final else 'N/A'
-                        }
-                        st.success(f"✅ {msg}")
-                        # ✅ NO balloons or containers here - let rerun handle it
-                    else:
-                        st.error(f"❌ {msg}")
-                        st.session_state.quick_add_success = None
+                    st.error(f"❌ {msg}")
+                    st.session_state.quick_add_success = None
             
-            # ✅ FIX: Display success details OUTSIDE form processing (after rerun)
-            if st.session_state.quick_add_success:
-                st.balloons()  # ✅ Safe to use here (outside form block)
+        # ✅ FIX: Display success details OUTSIDE form processing (after rerun)
+        if st.session_state.quick_add_success:
+            st.balloons()  # ✅ Safe to use here (outside form block)
+            
+            with st.container():
+                st.markdown("---")
+                st.subheader("📋 Last Created Record")
                 
-                with st.container():
-                    st.markdown("---")
-                    st.subheader("📋 Last Created Record")
-                    
-                    col_a, col_b, col_c = st.columns(3)
-                    with col_a:
-                        st.metric("Employee", st.session_state.quick_add_success['employee'])
-                    with col_b:
-                        st.metric("Date", st.session_state.quick_add_success['date'])
-                    with col_c:
-                        st.metric("Day Type", st.session_state.quick_add_success['day_type'])
-                    
-                    col_d, col_e = st.columns(2)
-                    with col_d:
-                        st.write(f"**Check-In:** {st.session_state.quick_add_success['check_in']}")
-                    with col_e:
-                        st.write(f"**Check-Out:** {st.session_state.quick_add_success['check_out']}")
+                col_a, col_b, col_c = st.columns(3)
+                with col_a:
+                    st.metric("Employee", st.session_state.quick_add_success['employee'])
+                with col_b:
+                    st.metric("Date", st.session_state.quick_add_success['date'])
+                with col_c:
+                    st.metric("Day Type", st.session_state.quick_add_success['day_type'])
                 
-                # Clear success state after displaying (or add a dismiss button)
-                # if st.button("✅ Dismiss", key="dismiss_success"):
-                #     st.session_state.quick_add_success = None
-                #     st.rerun()
+                col_d, col_e = st.columns(2)
+                with col_d:
+                    st.write(f"**Check-In:** {st.session_state.quick_add_success['check_in']}")
+                with col_e:
+                    st.write(f"**Check-Out:** {st.session_state.quick_add_success['check_out']}")
+            
+            # Clear success state after displaying (or add a dismiss button)
+            # if st.button("✅ Dismiss", key="dismiss_success"):
+            #     st.session_state.quick_add_success = None
+            #     st.rerun()
         
         # Show recent entries summary
         st.markdown("---")
