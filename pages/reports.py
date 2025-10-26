@@ -269,8 +269,11 @@ class ReportsPage:
             )
         
         with col4:
+
             ot_total = report['overtime_minutes']
-            ot_sign = "+" if ot_total > 0 else ""
+            #bugfix: show sign for overtime as (+/-) based on value
+            # fix is part of branch: bug/fix_absence_fays_salary_calculations
+            ot_sign = "+" if ot_total > 0 else "-"
             ot_h, ot_m = self.calculator.format_minutes_to_hours_minutes(abs(ot_total))
             st.metric("Total Overtime", f"{ot_sign}{ot_h}h {ot_m}m")
         
@@ -292,12 +295,19 @@ class ReportsPage:
         
         # Detailed calculation
         with st.expander("🔍 Detailed Salary Calculation"):
-            st.write("**Formula:** Salary = (Total Working Minutes × Minute Cost) + Extra Expenses + Bonus")
+            #bugfix: include overtime minutes in salary breakdown display
+            # fix is part of branch: bug/fix_absence_fays_salary_calculations
+            st.write("**Formula:** Salary = ((Total Working Minutes + Overtime Minutes) × Minute Cost) + Extra Expenses + Bonus")
             st.write("")
             st.write(f"**Total Working Minutes:** {report['total_working_minutes']} minutes")
+            #Include overtime minutes in breakdown
+            #fix is part of branch: bug/fix_absence_fays_salary_calculations
+            st.write(f"**Overtime Minutes:** {report['overtime_minutes']} minutes")
             st.write(f"**Minute Cost:** {report['minute_cost']} EGP/minute")
-            st.write(f"**Base Salary:** {report['total_working_minutes']} × {report['minute_cost']} = "
-                    f"{report['total_working_minutes'] * report['minute_cost']:.2f} EGP")
+            #bugfix: include overtime minutes in salary breakdown display and make it more clear
+            # fix is part of branch: bug/fix_absence_fays_salary_calculations
+            st.write(f"**Base Salary:** {(report['total_working_minutes'] + report['overtime_minutes'])} × {report['minute_cost']} = "
+                    f"{(report['total_working_minutes'] + report['overtime_minutes']) * report['minute_cost']:.2f} EGP")
             st.write(f"**Extra Expenses:** +{report['extra_expenses']:.2f} EGP")
             st.write(f"**Bonus (admin-set):** +{report['bonus']:.2f} EGP")
             st.write(f"**TOTAL SALARY:** {report['salary']:.2f} EGP")
