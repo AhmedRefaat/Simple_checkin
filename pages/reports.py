@@ -304,8 +304,10 @@ class ReportsPage:
             #fix is part of branch: bug/fix_absence_fays_salary_calculations
             st.write(f"**Overtime Minutes:** {report['overtime_minutes']} minutes")
             st.write(f"**Minute Cost:** {report['minute_cost']} EGP/minute")
-            st.write(f"**Base Salary:** {report['total_working_minutes']} × {report['minute_cost']} = "
-                    f"{report['total_working_minutes'] * report['minute_cost']:.2f} EGP")
+            #bugfix: include overtime minutes in salary breakdown display and make it more clear
+            # fix is part of branch: bug/fix_absence_fays_salary_calculations
+            st.write(f"**Base Salary:** {(report['total_working_minutes'] + report['overtime_minutes'])} × {report['minute_cost']} = "
+                    f"{(report['total_working_minutes'] + report['overtime_minutes']) * report['minute_cost']:.2f} EGP")
             st.write(f"**Extra Expenses:** +{report['extra_expenses']:.2f} EGP")
             st.write(f"**Bonus (admin-set):** +{report['bonus']:.2f} EGP")
             st.write(f"**TOTAL SALARY:** {report['salary']:.2f} EGP")
