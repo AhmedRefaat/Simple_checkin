@@ -29,6 +29,8 @@ from pages.reports import render_reports_page
 from utils.constants import SessionKeys, UserRole, UIConstants
 from utils.logger import  get_logger, AppLogger
 from config.config import Config
+from utils.device_detector import render_desktop_only_blocker  # ✅ NEW IMPORT
+
 
 # Configure logger (optional - already configured via environment variables)
 if hasattr(Config, 'LOG_LEVEL'):
@@ -306,6 +308,14 @@ def main():
     """
     # Configure page
     configure_page()
+
+    # ✅ NEW: Check if device is desktop (block mobile/tablet)
+    # Set allow_tablet=True if you want to allow tablets
+    if not render_desktop_only_blocker(allow_tablet=False):
+        # Mobile/tablet detected and blocked
+        logger.warning("Access blocked: Non-desktop device detected")
+        return  # Stop execution
+
     
     # Initialize session
     init_session_state()
