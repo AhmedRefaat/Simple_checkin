@@ -95,8 +95,8 @@ class DatabaseInitializer:
             return False
     
     def create_default_admin(self, 
-                           username: str = "admin_fatama", 
-                           password: str = "Bata8595",
+                           username: str = "admin", 
+                           password: str = "admin123",
                            full_name: str = "System Administrator") -> bool:
         """
         Create default administrator account.

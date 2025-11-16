@@ -25,6 +25,78 @@ logger = get_logger(__name__)
 load_dotenv()
 
 
+# ==================== Helper Function for Database URL ====================
+# This function is defined OUTSIDE the class to avoid initialization issues
+# It checks multiple sources for the database URL with proper priority
+def _get_database_url_with_priority(db_path: Path) -> str:
+    """
+    Get database URL from multiple sources with priority order.
+    
+    Priority:
+    1. Streamlit secrets (for Streamlit Cloud deployment)
+    2. Environment variable (for local development with .env)
+    3. SQLite fallback (default local development)
+    
+    Args:
+        db_path: Path to SQLite database file (used as fallback)
+        
+    Returns:
+        str: Database connection URL
+        
+    Note:
+        This function uses lazy import for Streamlit to avoid initializing
+        Streamlit during config module load. This ensures app.py can call
+        set_page_config() as the first Streamlit command.
+    """
+    # Priority 1: Try Streamlit secrets (Streamlit Cloud)
+    # Use lazy import to avoid premature Streamlit initialization
+    try:
+        # Check if we're in a Streamlit environment first
+        # by checking sys.modules instead of importing
+        import sys
+        
+        # Only try to access Streamlit if it's already been imported by app.py
+        if 'streamlit' in sys.modules:
+            # Streamlit is already imported (by app.py after set_page_config)
+            # Safe to access it now
+            st = sys.modules['streamlit']
+            
+            if hasattr(st, 'secrets') and 'DATABASE_URL' in st.secrets:
+                db_url = st.secrets['DATABASE_URL']
+                logger.debug("Using DATABASE_URL from Streamlit secrets")
+                
+                # Fix Heroku/Render postgres:// URLs (should be postgresql://)
+                if db_url.startswith('postgres://'):
+                    db_url = db_url.replace('postgres://', 'postgresql://', 1)
+                    logger.debug("Fixed postgres:// to postgresql://")
+                
+                return db_url
+        else:
+            # Streamlit not yet imported, skip secrets check
+            logger.debug("Streamlit not yet imported, skipping secrets check")
+            
+    except Exception as e:
+        # Secrets not configured or other error
+        logger.debug(f"Could not access Streamlit secrets: {e}")
+    
+    # Priority 2: Try environment variable (local development with .env)
+    env_db_url = os.getenv("DATABASE_URL")
+    if env_db_url:
+        logger.debug("Using DATABASE_URL from environment variable")
+        
+        # Fix Heroku/Render postgres:// URLs (should be postgresql://)
+        if env_db_url.startswith('postgres://'):
+            env_db_url = env_db_url.replace('postgres://', 'postgresql://', 1)
+            logger.debug("Fixed postgres:// to postgresql://")
+        
+        return env_db_url
+    
+    # Priority 3: SQLite fallback (default local development)
+    sqlite_url = f"sqlite:///{db_path}"
+    logger.debug(f"Using SQLite fallback: {sqlite_url}")
+    return sqlite_url
+
+
 class Config:
     """
     Application configuration class.
@@ -45,31 +117,34 @@ class Config:
     LOGS_DIR = BASE_DIR / "logs"
     
     # ==================== Database Configuration ====================
-    # SQLite database URL for SQLAlchemy
-    DATABASE_URL = f"sqlite:///{DB_PATH}"
-    
-    # Alternative: PostgreSQL for production
-    # DATABASE_URL = os.getenv(
-    #     "DATABASE_URL", 
-    #     "postgresql://user:password@localhost:5432/attendance_db"
-    # )
+    # Get database URL from environment/secrets or fallback to SQLite
+    # Priority: Streamlit secrets > Environment variable > SQLite (local dev)
+    DATABASE_URL = _get_database_url_with_priority(DB_PATH)
     
     # Database connection pool settings
     DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
     DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "10"))
     DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "30"))
     
+    # Database type detection
+    IS_POSTGRESQL = DATABASE_URL.startswith('postgresql://')
+    IS_SQLITE = DATABASE_URL.startswith('sqlite:///')
+
+    @classmethod
+    def is_postgresql(cls) -> bool:
+        """
+        Check if using PostgreSQL database.
+        
+        Returns:
+            bool: True if PostgreSQL, False if SQLite
+        """
+        # Use the already-resolved DATABASE_URL (which has priority logic built in)
+        return cls.IS_POSTGRESQL
+    
     # ==================== Security Configuration ====================
     # Secret key for session management (load from environment in production)
-    # SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
-    # SECRET_KEY - Try Streamlit secrets first, then environment variable, then default
-    try:
-        import streamlit as st
-        SECRET_KEY: str = st.secrets.get("SECRET_KEY", os.getenv('SECRET_KEY', '3GFUf5xNMCx-Jq85F3sEfwD0e_ZlEQquzX05dTSSdWA'))
-    except (ImportError, FileNotFoundError, KeyError):
-        # Fallback if not on Streamlit Cloud or secrets not configured
-        SECRET_KEY: str = os.getenv('SECRET_KEY', '3GFUf5xNMCx-Jq85F3sEfwD0e_ZlEQquzX05dTSSdWA')
-
+    SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+    
     # Password hashing rounds (higher = more secure but slower)
     BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "12"))
     
@@ -197,18 +272,8 @@ class Config:
         logger.info("Validating configuration")
         
         # Check if secret key is changed from default in production
-        # if not cls.DEVELOPMENT and cls.SECRET_KEY == "3GFUf5xNMCx-Jq85F3sEfwD0e_ZlEQquzX05dTSSdWA":
-        #     raise ValueError("SECRET_KEY must be changed in production environment")
-        try:
-            import streamlit as st
-            has_streamlit_secret = "SECRET_KEY" in st.secrets
-        except (ImportError, FileNotFoundError):
-            has_streamlit_secret = False
-        
-        if not cls.DEVELOPMENT and not has_streamlit_secret:
-            if cls.SECRET_KEY == 'change-this-secret-key-in-production':
-                raise ValueError("SECRET_KEY must be changed in production environment. "
-                            "Add it to Streamlit Cloud Secrets or set SECRET_KEY environment variable.")
+        if not cls.DEVELOPMENT and cls.SECRET_KEY == "your-secret-key-change-in-production":
+            raise ValueError("SECRET_KEY must be changed in production environment")
         
         # Validate numeric values
         if cls.BCRYPT_ROUNDS < 4 or cls.BCRYPT_ROUNDS > 31:
@@ -230,10 +295,25 @@ class Config:
         Returns:
             dict: Configuration summary (excluding sensitive data)
         """
+        # Determine database type
+        if cls.IS_POSTGRESQL:
+            db_type = "PostgreSQL (Neon)"
+            # Extract host from URL for display (hide password)
+            try:
+                from urllib.parse import urlparse
+                parsed = urlparse(cls.DATABASE_URL)
+                db_host = parsed.hostname
+            except:
+                db_host = "Unknown"
+        else:
+            db_type = "SQLite (Local)"
+            db_host = str(cls.DB_PATH)
+        
         return {
             "app_name": cls.APP_NAME,
             "app_version": cls.APP_VERSION,
-            "database_type": "SQLite" if "sqlite" in cls.DATABASE_URL else "PostgreSQL",
+            "database_type": db_type,
+            "database_host": db_host,
             "debug_mode": cls.DEBUG,
             "development_mode": cls.DEVELOPMENT,
             "logging_enabled": cls.LOGGING_ENABLED,

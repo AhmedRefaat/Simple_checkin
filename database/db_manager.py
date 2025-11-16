@@ -18,7 +18,7 @@ Usage:
     session.close()
 """
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, scoped_session, Session
 from sqlalchemy.pool import StaticPool
 from contextlib import contextmanager
@@ -82,38 +82,112 @@ class DatabaseManager:
             database_url = Config.get_database_url()
             logger.debug(f"Database URL: {database_url}")
             
-            # Create engine with appropriate settings
+            # Create engine with appropriate settings based on database type
             if "sqlite" in database_url:
-                # SQLite-specific configuration
+                # ============================================================
+                # SQLite Configuration (Local Development)
+                # ============================================================
+                # SQLite stores data in a local file, perfect for development
+                # but NOT suitable for Streamlit Cloud (ephemeral filesystem)
+                # ============================================================
                 logger.info("Configuring SQLite database engine")
+                
                 self.engine = create_engine(
                     database_url,
-                    # Use StaticPool for SQLite to avoid threading issues
-                    connect_args={"check_same_thread": False},
-                    poolclass=StaticPool,
+                    # SQLite-specific connection arguments
+                    connect_args={
+                        "check_same_thread": False,  # Allow multi-threaded access
+                    },
+                    poolclass=StaticPool,  # Single connection pool for SQLite
                     echo=Config.is_debug_mode(),  # Log SQL queries in debug mode
                 )
                 
                 # Enable foreign key constraints for SQLite
+                # SQLite has foreign keys disabled by default for backward compatibility
                 @event.listens_for(self.engine, "connect")
                 def set_sqlite_pragma(dbapi_conn, connection_record):
-                    """Enable foreign key constraints in SQLite"""
+                    """
+                    Enable foreign key constraints in SQLite.
+                    
+                    This ensures referential integrity (e.g., can't delete an employee
+                    with existing attendance records without CASCADE).
+                    """
                     cursor = dbapi_conn.cursor()
                     cursor.execute("PRAGMA foreign_keys=ON")
                     cursor.close()
                     logger.debug("Foreign key constraints enabled for SQLite")
-            
+
             else:
-                # PostgreSQL or other database configuration
+                # ============================================================
+                # PostgreSQL Configuration (Production - Streamlit Cloud)
+                # ============================================================
+                # PostgreSQL is a production-grade database hosted on Neon.tech
+                # Data persists across app restarts (no data loss)
+                # ============================================================
                 logger.info("Configuring PostgreSQL database engine")
+                
+                # PostgreSQL-specific connection arguments
+                # These are CRITICAL for Neon.tech compatibility
+                postgres_connect_args = {
+                    # SSL Mode: REQUIRED by Neon.tech for security
+                    # Without this, connection will fail with "SSL required" error
+                    "sslmode": "require",
+                    
+                    # Connection timeout: Prevent hanging on network issues
+                    "connect_timeout": 18,
+                    
+                    # Application name: Helps identify connections in PostgreSQL logs
+                    "application_name": "streamlit_attendance_app",
+
+                    # Additional settings for unreliable networks
+                    "keepalives": 1,  # Enable TCP keepalive
+                    "keepalives_idle": 30,  # Seconds before sending keepalive
+                    "keepalives_interval": 10,  # Seconds between keepalives
+                    "keepalives_count": 5,  # Number of keepalives before giving up
+                }
+                
                 self.engine = create_engine(
                     database_url,
-                    pool_size=Config.DB_POOL_SIZE,
-                    max_overflow=Config.DB_MAX_OVERFLOW,
-                    pool_timeout=Config.DB_POOL_TIMEOUT,
-                    pool_pre_ping=True,  # Enable connection health checks
+                    
+                    # ==================== Connection Pooling ====================
+                    # Connection pooling reuses database connections instead of
+                    # creating new ones for every query (much faster)
+                    
+                    pool_size=Config.DB_POOL_SIZE,  # Number of persistent connections (default: 5)
+                    max_overflow=Config.DB_MAX_OVERFLOW,  # Additional connections when pool is full (default: 10)
+                    pool_timeout=Config.DB_POOL_TIMEOUT,  # Seconds to wait for available connection (default: 30)
+                    
+                    # ==================== Connection Health ====================
+                    
+                    # Pool Pre-Ping: Test connection before using it
+                    # Executes "SELECT 1" to check if connection is alive
+                    # Prevents "connection already closed" errors
+                    pool_pre_ping=True,
+                    
+                    # Pool Recycle: Refresh connections after 1 hour
+                    # Cloud databases close idle connections after timeout
+                    # This prevents using stale connections
+                    # 3600 seconds = 1 hour (safe for Neon.tech)
+                    pool_recycle=3600,
+                    
+                    # ==================== PostgreSQL-Specific ====================
+                    
+                    # Connect args: SSL and other PostgreSQL settings
+                    connect_args=postgres_connect_args,
+                    
+                    # Echo SQL: Log all SQL queries (only in debug mode)
                     echo=Config.is_debug_mode(),
+                    
+                    # Isolation Level: Use default (READ COMMITTED)
+                    # Ensures data consistency across concurrent transactions
+                    # isolation_level="READ COMMITTED",  # Optional: explicitly set
                 )
+                
+                logger.info("PostgreSQL engine configured with SSL and connection pooling")
+                logger.debug(f"Pool config: size={Config.DB_POOL_SIZE}, "
+                            f"max_overflow={Config.DB_MAX_OVERFLOW}, "
+                            f"timeout={Config.DB_POOL_TIMEOUT}, "
+                            f"recycle=3600s")
             
             # Create session factory
             logger.debug("Creating session factory")
@@ -269,7 +343,7 @@ class DatabaseManager:
         try:
             # Try to execute a simple query
             with self.session_scope() as session:
-                session.execute("SELECT 1")
+                session.execute(text("SELECT 1"))
             
             logger.info("Database connection test successful")
             return True
