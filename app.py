@@ -15,6 +15,24 @@ Usage:
 
 import streamlit as st
 from datetime import datetime, timedelta
+from pathlib import Path
+import sys
+
+# ============================================================
+# PHASE 2: set_page_config() - MUST BE FIRST STREAMLIT COMMAND
+# ============================================================
+# This MUST come before ANY other st.* command or any import that uses Streamlit
+st.set_page_config(
+    page_title="Employee Check-in System",
+    page_icon="👤",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ============================================================
+# PHASE 3: Now Safe to Import Everything Else
+# ============================================================
+# After set_page_config(), we can import modules that use Streamlit
 
 # Import services
 from services.auth_service import AuthService
@@ -30,12 +48,12 @@ from utils.constants import SessionKeys, UserRole, UIConstants
 from utils.logger import  get_logger, AppLogger
 from config.config import Config
 
+# ============================================================
+# PHASE 4: Initialize Logging
+# ============================================================
 # Configure logger (optional - already configured via environment variables)
 if hasattr(Config, 'LOG_LEVEL'):
     AppLogger.set_level(Config.LOG_LEVEL)
-
-# Initialize logger
-logger = get_logger(__name__)
 
 # Initialize logger
 logger = get_logger(__name__)
@@ -304,9 +322,7 @@ def main():
     Handles routing and page rendering based on authentication
     and user role.
     """
-    # Configure page
-    configure_page()
-    
+      
     # Initialize session
     init_session_state()
     
@@ -315,6 +331,9 @@ def main():
         render_login_page()
         return
     
+    test_db() #Test DB connection
+
+
     # Render sidebar and get selected page
     selected_page = render_sidebar()
     
@@ -341,6 +360,20 @@ def main():
         logger.error(f"Error rendering page: {e}")
         st.error(f"An error occurred: {str(e)}")
         st.error("Please contact the administrator if this persists.")
+
+
+
+
+# ==================== Test DB connection ====================
+def test_db():
+    if db_manager.test_connection():
+        st.success("✅ Database connected successfully!")
+        db_info = db_manager.get_engine_info()
+        st.write(f"Database type: {db_info['dialect']}")
+        st.write(f"Driver: {db_info['driver']}")
+    else:
+        st.error("❌ Database connection failed!")
+
 
 
 # ==================== Application Entry Point ====================

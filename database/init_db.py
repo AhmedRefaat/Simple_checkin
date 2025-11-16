@@ -22,7 +22,7 @@ from datetime import date
 import bcrypt
 from sqlalchemy.exc import IntegrityError
 
-from db_manager import db_manager
+from database.db_manager import db_manager
 from database.models import User, Holiday
 from utils.constants import UserRole, DatabaseConstants
 from utils.logger import get_logger
