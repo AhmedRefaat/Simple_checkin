@@ -143,7 +143,14 @@ class Config:
     
     # ==================== Security Configuration ====================
     # Secret key for session management (load from environment in production)
-    SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+    # SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+     # SECRET_KEY - Try Streamlit secrets first, then environment variable, then default
+    try:
+        import streamlit as st
+        SECRET_KEY: str = st.secrets.get("SECRET_KEY", os.getenv('SECRET_KEY', '3GFUf5xNMCx-Jq85F3sEfwD0e_ZlEQquzX05dTSSdWA'))
+    except (ImportError, FileNotFoundError, KeyError):
+        # Fallback if not on Streamlit Cloud or secrets not configured
+        SECRET_KEY: str = os.getenv('SECRET_KEY', '3GFUf5xNMCx-Jq85F3sEfwD0e_ZlEQquzX05dTSSdWA')
     
     # Password hashing rounds (higher = more secure but slower)
     BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "12"))
@@ -272,8 +279,18 @@ class Config:
         logger.info("Validating configuration")
         
         # Check if secret key is changed from default in production
-        if not cls.DEVELOPMENT and cls.SECRET_KEY == "your-secret-key-change-in-production":
-            raise ValueError("SECRET_KEY must be changed in production environment")
+        # if not cls.DEVELOPMENT and cls.SECRET_KEY == "your-secret-key-change-in-production":
+        #     raise ValueError("SECRET_KEY must be changed in production environment")
+        try:
+            import streamlit as st
+            has_streamlit_secret = "SECRET_KEY" in st.secrets
+        except (ImportError, FileNotFoundError):
+            has_streamlit_secret = False
+        
+        if not cls.DEVELOPMENT and not has_streamlit_secret:
+            if cls.SECRET_KEY == 'change-this-secret-key-in-production':
+                raise ValueError("SECRET_KEY must be changed in production environment. "
+                            "Add it to Streamlit Cloud Secrets or set SECRET_KEY environment variable.")
         
         # Validate numeric values
         if cls.BCRYPT_ROUNDS < 4 or cls.BCRYPT_ROUNDS > 31:
