@@ -10,4 +10,4 @@ python-dotenv==1.0.0
 
 # ✅ ADD THESE FOR POSTGRESQL
 psycopg2-binary>=2.9.9
-SQLAlchemy[postgresql]>=2.0.0
+# SQLAlchemy[postgresql]>=2.0.0
