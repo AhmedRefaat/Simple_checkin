@@ -60,6 +60,14 @@ def _get_database_url_with_priority(db_path: Path) -> str:
             # Streamlit is already imported (by app.py after set_page_config)
             # Safe to access it now
             st = sys.modules['streamlit']
+
+            directory = "////workspaces/Simple_checkin"
+            contents = os.listdir(directory)
+            logger.info(f"Contents of {directory}: {contents}")
+
+            directory_path = Path("////workspaces/Simple_checkin")
+            contents = [item.name for item in directory_path.iterdir()]
+            logger.info(f"Contents of {directory_path}: {contents}")
             
             if hasattr(st, 'secrets') and 'DATABASE_URL' in st.secrets:
                 db_url = st.secrets['DATABASE_URL']
