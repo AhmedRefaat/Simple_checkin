@@ -21,11 +21,12 @@ from typing import List, Dict, Optional, Tuple
 from sqlalchemy import and_, func
 
 from database.db_manager import db_manager
-from database.models import Attendance, User, MonthlySummary
+from database.models import Attendance, User, MonthlySummary, Holiday
 from services.calculation_service import CalculationService
-from utils.constants import DayType, TimeConstants
+from utils.constants import DayType, TimeConstants, WorkHours 
 from utils.helpers import TimeHelper, CurrencyHelper
 from utils.logger import get_logger
+import calendar
 
 # Initialize logger
 logger = get_logger(__name__)
