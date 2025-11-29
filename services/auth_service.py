@@ -27,6 +27,7 @@ from utils.constants import UserRole, ValidationMessages, LogMessages, SessionKe
 from utils.validators import Validators
 from utils.logger import get_logger
 from config.config import Config
+from utils.timezone_helper import get_current_cairo_datetime #fix the issue to represent cairo time correctly
 
 # Initialize logger
 logger = get_logger(__name__)
@@ -183,7 +184,7 @@ class AuthService:
                 vacation_days = Config.DEFAULT_VACATION_DAYS
             
             if join_date is None:
-                join_date = datetime.now().date()
+                join_date = get_current_cairo_datetime().date() #fix the issue to represent cairo time correctly
             
             # Validate vacation days
             is_valid, error_msg = Validators.validate_vacation_days(vacation_days)
