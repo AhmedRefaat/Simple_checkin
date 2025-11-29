@@ -369,10 +369,12 @@ def test_db():
     if db_manager.test_connection():
         st.success("✅ Database connected successfully!")
         db_info = db_manager.get_engine_info()
-        st.write(f"Database type: {db_info['dialect']}")
-        st.write(f"Driver: {db_info['driver']}")
+        logger.info(f"Database connected: {db_info['dialect']} via {db_info['driver']}")
+        # st.write(f"Database type: {db_info['dialect']}") # commet to hide the db info from UI
+        # st.write(f"Driver: {db_info['driver']}") # commet to hide the db info from UI
     else:
         st.error("❌ Database connection failed!")
+        logger.error("Database connection test failed")
 
 
 

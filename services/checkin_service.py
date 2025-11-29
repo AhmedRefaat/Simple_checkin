@@ -24,6 +24,7 @@ from database.db_manager import db_manager
 from database.models import Attendance, User
 from services.calculation_service import CalculationService
 from utils.constants import DayType, ValidationMessages, LogMessages
+from utils.timezone_helper import get_current_cairo_datetime, get_current_cairo_date, get_current_cairo_time
 from utils.logger import get_logger
 
 # Initialize logger
@@ -75,11 +76,11 @@ class CheckinService:
         try:
             # Use current time if not specified
             if check_in_time is None:
-                check_in_time = datetime.now().time()
+                check_in_time = get_current_cairo_time()
                 logger.debug(f"Using current time for check-in: {check_in_time}")
             
             # Get today's date
-            today = date.today()
+            today = get_current_cairo_date()
             
             with self.db.session_scope() as session:
                 # Step 1: Check if user exists
@@ -176,11 +177,11 @@ class CheckinService:
         try:
             # Use current time if not specified
             if check_out_time is None:
-                check_out_time = datetime.now().time()
+                check_out_time = get_current_cairo_time()
                 logger.debug(f"Using current time for check-out: {check_out_time}")
             
             # Get today's date
-            today = date.today()
+            today = get_current_cairo_date()
             
             with self.db.session_scope() as session:
                 # Step 1: Get today's attendance record
@@ -263,10 +264,10 @@ class CheckinService:
         Returns:
             Attendance object or None if no record exists
         """
-        logger.debug(f"Fetching today's attendance for user: {user_id}")
+        logger.debug(f"Fetching today's attendance for user: {user_id=}")
         
         try:
-            today = date.today()
+            today = get_current_cairo_date()
             
             with self.db.session_scope() as session:
                 attendance = session.query(Attendance).filter(
@@ -469,7 +470,7 @@ class CheckinService:
         Returns:
             dict: Status information
         """
-        logger.debug(f"Getting current status for user: {user_id}")
+        logger.debug(f"Getting current status for user: {user_id=}")
         
         attendance = self.get_today_attendance(user_id)
         
@@ -491,7 +492,7 @@ class CheckinService:
             working_minutes = attendance.total_working_minutes
         else:
             # Calculate current working time
-            current_time = datetime.now().time()
+            current_time = get_current_cairo_time()
             working_minutes = self.calculator.calculate_working_time(
                 attendance.check_in_time,
                 current_time
