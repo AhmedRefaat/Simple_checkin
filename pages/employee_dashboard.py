@@ -24,6 +24,7 @@ from services.calculation_service import CalculationService
 from services.auth_service import AuthService  # add this to auth-user using auth_service ➡️ part of feature/change_user_password
 from utils.helpers import TimeHelper, CurrencyHelper
 from utils.constants import SessionKeys, DayType
+from utils.timezone_helper import get_current_cairo_datetime
 from utils.logger import get_logger
 
 # Initialize logger
@@ -139,11 +140,12 @@ class EmployeeDashboard:
             return
         
         # Month selection
+        cairo_today = get_current_cairo_datetime().date()
         col1, col2 = st.columns(2)
         with col1:
-            year = st.number_input("Year", min_value=2020, max_value=2100, value=date.today().year)
+            year = st.number_input("Year", min_value=2020, max_value=2100, value=cairo_today.year)
         with col2:
-            month = st.number_input("Month", min_value=1, max_value=12, value=date.today().month)
+            month = st.number_input("Month", min_value=1, max_value=12, value=cairo_today.month)
         
         # Get report
         report = self.report_service.get_monthly_report(user_id, year, month)
@@ -579,7 +581,7 @@ class EmployeeDashboard:
         st.subheader("📈 This Month's Statistics")
         
         # Get current month report
-        today = date.today()
+        today = get_current_cairo_datetime().date()
         report = self.report_service.get_monthly_report(user_id, today.year, today.month)
         
         if not report:

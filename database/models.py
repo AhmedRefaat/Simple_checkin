@@ -23,6 +23,7 @@ from sqlalchemy.orm import relationship
 
 from utils.logger import get_logger
 from utils.constants import UserRole, DayType, WorkHours, DatabaseConstants
+import pytz #fix to pound any timezone in DB to UTC and UI to Cairo
 
 # Initialize logger
 logger = get_logger(__name__)
@@ -120,14 +121,14 @@ class User(Base):
     # ==================== Audit Fields ====================
     created_at = Column(
         DateTime, 
-        default=datetime.utcnow,
-        comment="Record creation timestamp"
+        default=lambda: datetime.now(pytz.utc), #fix to pound any timezone in DB to UTC and UI to Cairo
+        comment="Record creation timestamp (UTC)"
     )
     
     updated_at = Column(
         DateTime, 
-        default=datetime.utcnow, 
-        onupdate=datetime.utcnow,
+        default=lambda: datetime.now(pytz.utc), #fix to pound any timezone in DB to UTC and UI to Cairo
+        onupdate=lambda: datetime.now(pytz.utc), #fix to pound any timezone in DB to UTC and UI to Cairo
         comment="Record last update timestamp"
     )
     
@@ -295,14 +296,14 @@ class Attendance(Base):
     # ==================== Audit Fields ====================
     created_at = Column(
         DateTime, 
-        default=datetime.utcnow,
+        default=lambda: datetime.now(pytz.utc), #fix to pound any timezone in DB to UTC and UI to Cairo
         comment="Record creation timestamp"
     )
     
     updated_at = Column(
         DateTime, 
-        default=datetime.utcnow, 
-        onupdate=datetime.utcnow,
+        default=lambda: datetime.now(pytz.utc), #fix to pound any timezone in DB to UTC and UI to Cairo 
+        onupdate=lambda: datetime.now(pytz.utc), #fix to pound any timezone in DB to UTC and UI to Cairo
         comment="Record last update timestamp"
     )
     
@@ -479,7 +480,7 @@ class MonthlySummary(Base):
     # ==================== Audit Fields ====================
     created_at = Column(
         DateTime, 
-        default=datetime.utcnow,
+        default=lambda: datetime.now(pytz.utc), #fix to pound any timezone in DB to UTC and UI to Cairo
         comment="Record creation timestamp"
     )
     
@@ -595,7 +596,7 @@ class Holiday(Base):
     # ==================== Audit Fields ====================
     created_at = Column(
         DateTime, 
-        default=datetime.utcnow,
+        default=lambda: datetime.now(pytz.utc), #fix to pound any timezone in DB to UTC and UI to Cairo
         comment="Record creation timestamp"
     )
     
